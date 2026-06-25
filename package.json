@@ -2,7 +2,7 @@
   "name": "geo-opt",
   "version": "1.0.0",
   "description": "Generative Engine Optimization (GEO) Audit and Injection CLI tool",
-  "main": "src/optimizer.js",
+  "main": "src/index.js",
   "bin": {
     "geo-opt": "./bin/cli.js"
   },

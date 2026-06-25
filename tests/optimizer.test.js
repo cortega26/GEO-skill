@@ -12,7 +12,7 @@ import {
   generateSchemaData,
   injectSchema,
   preprocessContent,
-} from "../src/optimizer.js";
+} from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

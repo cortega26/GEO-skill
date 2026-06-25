@@ -6,7 +6,7 @@ import {
   generateSchemaData,
   injectSchema,
   loadConfig,
-} from "../src/optimizer.js";
+} from "../src/index.js";
 
 function printHelp() {
   console.log(`
