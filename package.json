@@ -1,11 +1,21 @@
 {
   "name": "geo-opt",
-  "version": "1.0.0",
-  "description": "Generative Engine Optimization (GEO) Audit and Injection CLI tool",
+  "version": "2.0.0",
+  "description": "Source-available Generative Engine Optimization audit and structured-data CLI",
   "main": "src/index.js",
   "bin": {
     "geo-opt": "./bin/cli.js"
   },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE",
+    "COMMERCIAL-LICENSE.md",
+    "LICENSE-HISTORY.md",
+    "LEGACY-MIT-LICENSE",
+    "docs/"
+  ],
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.js",
@@ -30,7 +40,15 @@
     "schema"
   ],
   "author": "Carlos Ortega González",
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cortega26/GEO-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/cortega26/GEO-skill/issues"
+  },
+  "homepage": "https://github.com/cortega26/GEO-skill#readme",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.5.0",

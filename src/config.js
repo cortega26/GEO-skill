@@ -13,6 +13,7 @@ export function loadConfig(configPath = null) {
     if (!fs.existsSync(configPath)) {
       console.error(`Error: Specified config file ${configPath} not found.`);
       process.exit(1);
+      return;
     }
     searchPaths.push(configPath);
   } else {

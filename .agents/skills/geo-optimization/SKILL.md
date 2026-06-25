@@ -40,14 +40,14 @@ Before performing audits, create a `geo_config.json` configuration file in the r
 ```json
 {
   "author": {
-    "name": "Carlos Ortega González",
-    "jobTitle": "Sr. Software Automation and Data Analyst",
-    "sameAs": "https://www.linkedin.com/in/cortega26/"
+    "name": "Content Author",
+    "jobTitle": "Author Role",
+    "sameAs": "https://example.com/author"
   },
   "publisher": {
-    "name": "Tooltician",
-    "url": "https://www.tooltician.com",
-    "logo": "https://www.tooltician.com/logo.png"
+    "name": "Content Publisher",
+    "url": "https://example.com",
+    "logo": "https://example.com/logo.png"
   },
   "acronyms": {
     "AWS": "Amazon Web Services",
@@ -123,6 +123,8 @@ Add structured JSON-LD data to help search engine crawlers explicitly map entity
     python3 scripts/geo_optimizer.py inject <path-to-file> <article|faq|product>
     ```
 2.  For markdown files, it appends a ```json code block containing the structured data. For HTML files, it inserts or updates a `<script type="application/ld+json">` tag within the head or body tags.
+3.  Free injections include a visible `Optimized with Tooltician` credit. Tooltician Pro users may pass `--no-branding` with a license key configured through `TOOLTICIAN_LICENSE_KEY` or `license.key` in `geo_config.json`.
+4.  The helper may show an infrequent, non-blocking support reminder after interactive Community use. It is suppressed for Pro and automation and can be disabled with `geo_optimizer.py config set reminders false`.
 
 ---
 

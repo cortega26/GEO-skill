@@ -1,7 +1,9 @@
 import test, { mock } from "node:test";
 import assert from "node:assert";
 import fs from "fs";
+import os from "os";
 import path from "path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "url";
 import {
   auditFile,
@@ -10,8 +12,14 @@ import {
   cleanMarkdownToPlainText,
   extractSections,
   generateSchemaData,
+  getNoBrandingError,
+  hasProEntitlement,
   injectSchema,
   preprocessContent,
+  readEngagementState,
+  recordSuccessfulFreeInjection,
+  remindersAreEnabled,
+  setRemindersEnabled,
 } from "../src/index.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,10 +36,16 @@ const config = {
     url: "https://www.tooltician.com",
     logo: "https://www.tooltician.com/logo.png",
   },
-  signature: "Optimized by [Tooltician](https://www.tooltician.com)",
   acronyms: {
     AWS: "Amazon Web Services",
     GDPR: "General Data Protection Regulation",
+  },
+  product: {
+    offer: {
+      price: "49.00",
+      priceCurrency: "USD",
+      availability: "https://schema.org/InStock",
+    },
   },
 };
 
@@ -124,7 +138,7 @@ This is the body text.
     injectSchema(tempFile, "article", config);
     const content = fs.readFileSync(tempFile, { encoding: "utf8" });
 
-    assert.ok(content.includes("Optimized by [Tooltician]"));
+    assert.ok(content.includes("Optimized with [Tooltician]"));
     assert.ok(content.includes("```json"));
     assert.ok(content.includes("Carlos Ortega González"));
     assert.ok(content.includes("https://www.tooltician.com/#author"));
@@ -322,6 +336,7 @@ A comprehensive suite of tools for migrating on-premises workloads to hybrid clo
     assert.ok(product);
     assert.strictEqual(product.name, "Cloud Migration Toolkit");
     assert.ok(product.offers);
+    assert.strictEqual(product.offers.price, "49.00");
     assert.strictEqual(product.offers.priceCurrency, "USD");
     assert.strictEqual(product.offers.availability, "https://schema.org/InStock");
 
@@ -331,6 +346,223 @@ A comprehensive suite of tools for migrating on-premises workloads to hybrid clo
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);
     }
+  }
+});
+
+test("generateSchemaData omits identity and commerce claims when unconfigured", () => {
+  const tempFile = path.join(__dirname, "temp_unconfigured.md");
+  fs.writeFileSync(tempFile, "# Independent Article\n\nIndependent body text.", {
+    encoding: "utf8",
+  });
+
+  try {
+    const articleSchema = generateSchemaData(tempFile, "article", {});
+    const article = articleSchema["@graph"].find((node) => node["@type"] === "NewsArticle");
+
+    assert.deepStrictEqual(
+      articleSchema["@graph"].map((node) => node["@type"]),
+      ["NewsArticle"]
+    );
+    assert.strictEqual(article.author, undefined);
+    assert.strictEqual(article.publisher, undefined);
+    assert.strictEqual(article.datePublished, undefined);
+
+    const productSchema = generateSchemaData(tempFile, "product", {});
+    const product = productSchema["@graph"].find((node) => node["@type"] === "Product");
+    assert.strictEqual(product.brand, undefined);
+    assert.strictEqual(product.offers, undefined);
+  } finally {
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+  }
+});
+
+test("Tooltician Pro entitlement uses the documented local key sources", () => {
+  const validKey = "tt_pro_1234567890abcdefghij";
+  assert.strictEqual(hasProEntitlement({}, {}), false);
+  assert.strictEqual(hasProEntitlement({ license: { key: validKey } }, {}), true);
+  assert.strictEqual(hasProEntitlement({}, { TOOLTICIAN_LICENSE_KEY: validKey }), true);
+  assert.match(getNoBrandingError({}, {}), /requires a Tooltician Pro license key/);
+});
+
+test("CLI requires Pro entitlement for --no-branding and removes branding when entitled", () => {
+  const tempFile = path.join(__dirname, "temp_no_branding.md");
+  const cliPath = path.join(__dirname, "..", "bin", "cli.js");
+  const original = "# Independent Article\n\nIndependent body text.\n";
+  fs.writeFileSync(tempFile, original, { encoding: "utf8" });
+
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.TOOLTICIAN_LICENSE_KEY;
+
+  try {
+    const rejected = spawnSync(
+      process.execPath,
+      [cliPath, "inject", tempFile, "article", "--no-branding"],
+      { cwd: path.join(__dirname, ".."), env: cleanEnv, encoding: "utf8" }
+    );
+    assert.strictEqual(rejected.status, 1);
+    assert.match(rejected.stderr, /requires a Tooltician Pro license key/);
+    assert.strictEqual(fs.readFileSync(tempFile, "utf8"), original);
+
+    const branded = spawnSync(process.execPath, [cliPath, "inject", tempFile, "article"], {
+      cwd: path.join(__dirname, ".."),
+      env: cleanEnv,
+      encoding: "utf8",
+    });
+    assert.strictEqual(branded.status, 0, branded.stderr);
+    assert.ok(fs.readFileSync(tempFile, "utf8").includes("Optimized with [Tooltician]"));
+
+    const accepted = spawnSync(
+      process.execPath,
+      [cliPath, "inject", tempFile, "article", "--no-branding"],
+      {
+        cwd: path.join(__dirname, ".."),
+        env: {
+          ...cleanEnv,
+          TOOLTICIAN_LICENSE_KEY: "tt_pro_1234567890abcdefghij",
+        },
+        encoding: "utf8",
+      }
+    );
+    assert.strictEqual(accepted.status, 0, accepted.stderr);
+
+    const content = fs.readFileSync(tempFile, "utf8");
+    assert.ok(content.includes("```json"));
+    assert.strictEqual(content.includes("Tooltician"), false);
+    assert.strictEqual(content.includes("Carlos Ortega"), false);
+  } finally {
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+  }
+});
+
+test("support reminders are infrequent, automation-safe, and user-disableable", () => {
+  const stateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "geo-opt-state-"));
+  const statePath = path.join(stateDirectory, "state.json");
+  const writes = [];
+  const stderr = {
+    isTTY: true,
+    write(message) {
+      writes.push(message);
+    },
+  };
+  const env = {};
+  const firstRun = new Date("2026-01-01T00:00:00.000Z");
+
+  try {
+    for (let index = 0; index < 9; index += 1) {
+      const result = recordSuccessfulFreeInjection({}, { statePath, stderr, env, now: firstRun });
+      assert.strictEqual(result.shown, false);
+    }
+    assert.strictEqual(writes.length, 0);
+
+    const tenth = recordSuccessfulFreeInjection({}, { statePath, stderr, env, now: firstRun });
+    assert.strictEqual(tenth.shown, true);
+    assert.strictEqual(writes.length, 1);
+    assert.match(writes[0], /config set reminders false/);
+
+    for (let index = 0; index < 10; index += 1) {
+      recordSuccessfulFreeInjection(
+        {},
+        {
+          statePath,
+          stderr,
+          env,
+          now: new Date("2026-01-02T00:00:00.000Z"),
+        }
+      );
+    }
+    assert.strictEqual(writes.length, 1);
+
+    const afterCooldown = recordSuccessfulFreeInjection(
+      {},
+      {
+        statePath,
+        stderr,
+        env,
+        now: new Date("2026-01-08T00:00:01.000Z"),
+      }
+    );
+    assert.strictEqual(afterCooldown.shown, true);
+    assert.strictEqual(writes.length, 2);
+
+    assert.strictEqual(setRemindersEnabled(false, { statePath, env }), true);
+    assert.strictEqual(remindersAreEnabled({ statePath, env }), false);
+    const disabled = recordSuccessfulFreeInjection(
+      {},
+      {
+        statePath,
+        stderr,
+        env,
+        now: new Date("2026-03-15T00:00:00.000Z"),
+      }
+    );
+    assert.strictEqual(disabled.reason, "disabled");
+
+    assert.strictEqual(setRemindersEnabled(true, { statePath, env }), true);
+    const automated = recordSuccessfulFreeInjection(
+      {},
+      {
+        statePath,
+        stderr,
+        env: { CI: "true" },
+        now: new Date("2026-03-15T00:00:00.000Z"),
+      }
+    );
+    assert.strictEqual(automated.reason, "suppressed");
+
+    const piped = recordSuccessfulFreeInjection(
+      {},
+      {
+        statePath,
+        stderr: { isTTY: false, write() {} },
+        env,
+        now: new Date("2026-03-15T00:00:00.000Z"),
+      }
+    );
+    assert.strictEqual(piped.reason, "suppressed");
+
+    const pro = recordSuccessfulFreeInjection(
+      { license: { key: "tt_pro_1234567890abcdefghij" } },
+      {
+        statePath,
+        stderr,
+        env,
+        now: new Date("2026-03-15T00:00:00.000Z"),
+      }
+    );
+    assert.strictEqual(pro.reason, "suppressed");
+    assert.strictEqual(readEngagementState({ statePath, env }).remindersEnabled, true);
+  } finally {
+    fs.rmSync(stateDirectory, { recursive: true, force: true });
+  }
+});
+
+test("CLI config command persists the reminder preference", () => {
+  const stateDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "geo-opt-config-"));
+  const cliPath = path.join(__dirname, "..", "bin", "cli.js");
+  const env = { ...process.env, GEO_OPT_STATE_DIR: stateDirectory };
+
+  try {
+    const disabled = spawnSync(process.execPath, [cliPath, "config", "set", "reminders", "false"], {
+      cwd: path.join(__dirname, ".."),
+      env,
+      encoding: "utf8",
+    });
+    assert.strictEqual(disabled.status, 0, disabled.stderr);
+    assert.match(disabled.stdout, /disabled/);
+
+    const readBack = spawnSync(process.execPath, [cliPath, "config", "get", "reminders"], {
+      cwd: path.join(__dirname, ".."),
+      env,
+      encoding: "utf8",
+    });
+    assert.strictEqual(readBack.status, 0, readBack.stderr);
+    assert.strictEqual(readBack.stdout.trim(), "false");
+  } finally {
+    fs.rmSync(stateDirectory, { recursive: true, force: true });
   }
 });
 
@@ -380,6 +612,35 @@ Three out of four IT managers recommend the approach.
     // en la categoría de estadísticas
     assert.ok(typeof score === "number");
     assert.ok(score > 0);
+  } finally {
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+  }
+});
+
+test("injectSchema escapes </script> in JSON-LD to prevent XSS breakout (SEC-03)", () => {
+  const tempFile = path.join(__dirname, "temp_xss.md");
+  const xssTitle = "# Test </script><img src=x onerror=alert(1)>";
+  fs.writeFileSync(tempFile, `${xssTitle}\n\nBody text.`, { encoding: "utf8" });
+
+  try {
+    injectSchema(tempFile, "article", config);
+    const content = fs.readFileSync(tempFile, { encoding: "utf8" });
+
+    // Extract the JSON-LD block from the markdown code fence
+    const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/);
+    assert.ok(jsonMatch, "JSON-LD code block should exist");
+    const jsonLd = jsonMatch[1];
+
+    // The JSON-LD must escape </ to prevent script tag breakout
+    assert.ok(jsonLd.includes("<\\/script"), "JSON-LD should escape </script> as <\\/script");
+    // Raw </script> must NOT appear inside the JSON-LD
+    assert.strictEqual(
+      jsonLd.includes("</script>"),
+      false,
+      "JSON-LD must not contain raw </script>"
+    );
   } finally {
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);

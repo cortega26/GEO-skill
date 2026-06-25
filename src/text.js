@@ -29,6 +29,9 @@ export function preprocessContent(content) {
 export function cleanMarkdownToPlainText(mdText) {
   // Remove markdown links, keeping text: [text](url) -> text
   let text = mdText.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  // Unwrap inline code spans before stripping formatting, so that
+  // * and _ inside `backticks` are preserved as literal characters.
+  text = text.replace(/`([^`]+)`/g, "$1");
   // Remove bold/italic markup
   text = text.replace(/[\*_]{1,3}/g, "");
 
@@ -50,7 +53,11 @@ export function cleanMarkdownToPlainText(mdText) {
     }
   }
 
-  return lines.join("\n").trim();
+  // Join lines and strip any remaining HTML tags for clean schema output
+  return lines
+    .join("\n")
+    .replace(/<[^>]+>/g, "")
+    .trim();
 }
 
 export function extractSections(content) {
@@ -60,7 +67,12 @@ export function extractSections(content) {
   let currentText = [];
 
   for (const line of cleanContent.split("\n")) {
-    const headerMatch = line.match(/^(##+)\s+(.+)$/);
+    // Markdown headings: ## Title, ### Subtitle
+    let headerMatch = line.match(/^(##+)\s+(.+)$/);
+    if (!headerMatch) {
+      // HTML headings: <h2>Title</h2>, <h3>Subtitle</h3>
+      headerMatch = line.match(/^<h([234])[^>]*>(.+)<\/h\1>$/i);
+    }
     if (headerMatch) {
       if (currentHeader) {
         sections.push({ header: currentHeader, body: currentText.join("\n").trim() });

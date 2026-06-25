@@ -6,6 +6,7 @@ export function auditFile(filepath, config, outputFormat = "text") {
   if (!fs.existsSync(filepath)) {
     console.error(`Error: File ${filepath} not found.`);
     process.exit(1);
+    return;
   }
 
   let content = "";
@@ -14,6 +15,7 @@ export function auditFile(filepath, config, outputFormat = "text") {
   } catch (e) {
     console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
     process.exit(1);
+    return;
   }
 
   const textContent = preprocessContent(content);
@@ -90,8 +92,10 @@ export function auditFile(filepath, config, outputFormat = "text") {
   }
 
   // HTML semantic tag audits
-  if (filepath.endsWith(".html") || content.toLowerCase().includes("<html")) {
-    const htmlLower = content.toLowerCase();
+  // Use textContent (code blocks stripped) to avoid false positives
+  // when markdown files contain HTML code examples inside code fences.
+  if (filepath.endsWith(".html") || textContent.toLowerCase().includes("<html")) {
+    const htmlLower = textContent.toLowerCase();
     const semanticTags = ["<article", "<main", "<header", "<footer", "<nav", "<section"];
     const foundTags = semanticTags.filter((t) => htmlLower.includes(t));
     if (foundTags.length >= 3) {

@@ -8,6 +8,213 @@ from datetime import datetime, timezone
 
 # Default thresholds
 MAX_PRONOUN_DENSITY = 0.02
+LICENSE_ENV_VAR = "TOOLTICIAN_LICENSE_KEY"
+PRO_LICENSE_PATTERN = re.compile(r"^tt_pro_[A-Za-z0-9_-]{20,}$")
+TOOLTICIAN_BRANDING_MARKDOWN = "Optimized with [Tooltician](https://www.tooltician.com)"
+TOOLTICIAN_BRANDING_HTML = (
+    '<div class="geo-signature"><p>Optimized with '
+    '<a href="https://www.tooltician.com">Tooltician</a></p></div>'
+)
+SUPPORTED_SCHEMA_TYPES = {"article", "faq", "product"}
+REMINDER_INJECTION_INTERVAL = 10
+REMINDER_COOLDOWN_SECONDS = 7 * 24 * 60 * 60
+STATE_DIR_ENV_VAR = "GEO_OPT_STATE_DIR"
+SUPPORT_URL = "https://www.tooltician.com"
+
+
+def resolve_license_key(config, env=None):
+    """Returns the locally configured Pro license key without logging it."""
+    env = os.environ if env is None else env
+    license_config = config.get("license", {})
+    configured_key = (
+        license_config.get("key")
+        if isinstance(license_config, dict)
+        else None
+    ) or config.get("licenseKey")
+    candidate = env.get(LICENSE_ENV_VAR) or configured_key
+    return candidate.strip() if isinstance(candidate, str) else ""
+
+
+def has_pro_entitlement(config, env=None):
+    """Checks the local Tooltician Pro key format.
+
+    This is a convenience entitlement gate for the source-available CLI, not a
+    cryptographic or server-side license verification mechanism.
+    """
+    return bool(PRO_LICENSE_PATTERN.fullmatch(resolve_license_key(config, env)))
+
+
+def no_branding_error(config, env=None):
+    if has_pro_entitlement(config, env):
+        return None
+    return (
+        "--no-branding requires a Tooltician Pro license key. "
+        f"Set {LICENSE_ENV_VAR} or license.key in geo_config.json."
+    )
+
+
+def get_state_path(env=None):
+    env = os.environ if env is None else env
+    base_dir = (
+        env.get(STATE_DIR_ENV_VAR)
+        or env.get("XDG_CONFIG_HOME")
+        or os.path.join(os.path.expanduser("~"), ".config")
+    )
+    return os.path.join(base_dir, "geo-opt", "state.json")
+
+
+def default_engagement_state():
+    return {
+        "remindersEnabled": True,
+        "successfulFreeInjections": 0,
+        "lastReminderAt": None,
+    }
+
+
+def read_engagement_state(state_path=None, env=None):
+    state_path = state_path or get_state_path(env)
+    try:
+        with open(state_path, "r", encoding="utf-8") as state_file:
+            parsed = json.load(state_file)
+        state = default_engagement_state()
+        state.update(parsed)
+        state["remindersEnabled"] = parsed.get("remindersEnabled") is not False
+        count = parsed.get("successfulFreeInjections", 0)
+        state["successfulFreeInjections"] = max(0, count) if isinstance(count, int) else 0
+        last_reminder = parsed.get("lastReminderAt")
+        state["lastReminderAt"] = last_reminder if isinstance(last_reminder, str) else None
+        return state
+    except (OSError, ValueError, TypeError):
+        return default_engagement_state()
+
+
+def write_engagement_state(state, state_path=None, env=None):
+    state_path = state_path or get_state_path(env)
+    directory = os.path.dirname(state_path)
+    temporary_path = f"{state_path}.{os.getpid()}.tmp"
+    try:
+        os.makedirs(directory, mode=0o700, exist_ok=True)
+        with open(temporary_path, "w", encoding="utf-8") as state_file:
+            json.dump(state, state_file, indent=2)
+            state_file.write("\n")
+        os.chmod(temporary_path, 0o600)
+        os.replace(temporary_path, state_path)
+        return True
+    except OSError:
+        try:
+            os.remove(temporary_path)
+        except OSError:
+            pass
+        return False
+
+
+def set_reminders_enabled(enabled, state_path=None, env=None):
+    state = read_engagement_state(state_path, env)
+    state["remindersEnabled"] = enabled
+    return write_engagement_state(state, state_path, env)
+
+
+def reminders_are_enabled(state_path=None, env=None):
+    return read_engagement_state(state_path, env)["remindersEnabled"]
+
+
+def is_automated_environment(env):
+    return any(
+        env.get(name)
+        for name in (
+            "CI",
+            "GITHUB_ACTIONS",
+            "GITLAB_CI",
+            "BUILDKITE",
+            "JENKINS_URL",
+            "TF_BUILD",
+        )
+    )
+
+
+def record_successful_free_injection(
+    config,
+    state_path=None,
+    env=None,
+    stderr=None,
+    now=None,
+):
+    env = os.environ if env is None else env
+    stderr = sys.stderr if stderr is None else stderr
+    now = datetime.now(timezone.utc) if now is None else now
+
+    if (
+        has_pro_entitlement(config, env)
+        or not getattr(stderr, "isatty", lambda: False)()
+        or is_automated_environment(env)
+        or env.get("GEO_OPT_DISABLE_REMINDERS") == "1"
+    ):
+        return {"shown": False, "reason": "suppressed"}
+
+    state = read_engagement_state(state_path, env)
+    if not state["remindersEnabled"]:
+        return {"shown": False, "reason": "disabled"}
+
+    state["successfulFreeInjections"] += 1
+    last_reminder = None
+    if state["lastReminderAt"]:
+        try:
+            last_reminder = datetime.fromisoformat(
+                state["lastReminderAt"].replace("Z", "+00:00")
+            )
+        except ValueError:
+            last_reminder = None
+
+    cooldown_elapsed = (
+        last_reminder is None
+        or (now - last_reminder).total_seconds() >= REMINDER_COOLDOWN_SECONDS
+    )
+    interval_reached = (
+        state["successfulFreeInjections"] >= REMINDER_INJECTION_INTERVAL
+    )
+
+    if interval_reached and cooldown_elapsed:
+        print(
+            "\nEnjoying geo-opt? Support Tooltician and unlock branding-free output:\n"
+            f"{SUPPORT_URL}\n"
+            "Hide this message: geo-opt config set reminders false\n",
+            file=stderr,
+        )
+        state["successfulFreeInjections"] = 0
+        state["lastReminderAt"] = now.isoformat()
+        write_engagement_state(state, state_path, env)
+        return {"shown": True, "reason": "interval"}
+
+    write_engagement_state(state, state_path, env)
+    return {
+        "shown": False,
+        "reason": "cooldown" if interval_reached else "interval",
+    }
+
+
+def optional_id(base_url, fragment):
+    return f"{base_url}/#{fragment}" if base_url else None
+
+
+def reference_or_inline(node, node_id):
+    return {"@id": node_id} if node_id else node
+
+
+def strip_tooltician_branding(content):
+    content = re.sub(
+        r"\n{0,2}Optimized (?:by|with) \[Tooltician\]"
+        r"\(https?://(?:www\.)?tooltician\.com/?\)\s*",
+        "\n",
+        content,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(
+        r'\s*<div[^>]*class=["\'][^"\']*\bgeo-signature\b[^"\']*["\'][^>]*>'
+        r".*?</div>\s*",
+        "\n",
+        content,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
 
 def load_config(config_path=None):
     """Loads configuration file containing default author details and acronym dictionary."""
@@ -61,6 +268,9 @@ def clean_markdown_to_plain_text(md_text):
     """Converts markdown (links, bold, tables) to clean, search-compliant plain text for schema nodes."""
     # Remove links keeping text: [text](url) -> text
     text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', md_text)
+    # Unwrap inline code spans before stripping formatting, so that
+    # * and _ inside `backticks` are preserved as literal characters.
+    text = re.sub(r'`([^`]+)`', r'\1', text)
     # Remove bold/italic tags
     text = re.sub(r'[\*_]{1,3}', '', text)
     
@@ -76,7 +286,8 @@ def clean_markdown_to_plain_text(md_text):
         else:
             lines.append(line)
             
-    return '\n'.join(lines).strip()
+    # Join lines and strip any remaining HTML tags for clean schema output
+    return re.sub(r'<[^>]+>', '', '\n'.join(lines)).strip()
 
 def extract_sections(content):
     """Robustly extracts headings and their clean body text from markdown, stripping code blocks."""
@@ -86,7 +297,11 @@ def extract_sections(content):
     current_text = []
     
     for line in clean_content.split('\n'):
+        # Markdown headings: ## Title, ### Subtitle
         header_match = re.match(r'^(##+)\s+(.+)$', line)
+        if not header_match:
+            # HTML headings: <h2>Title</h2>, <h3>Subtitle</h3>
+            header_match = re.match(r'^<h([234])[^>]*>(.+)</h\1>$', line, re.IGNORECASE)
         if header_match:
             if current_header:
                 sections.append((current_header, '\n'.join(current_text).strip()))
@@ -162,8 +377,10 @@ def audit_file(filepath, config, output_format="text"):
         struct_breakdown.append("Headers: No H2/H3 headers found (+0 pts)")
 
     # Check for HTML semantic layout if it's an HTML file (Technical AI Readiness)
-    if filepath.endswith('.html') or "<html" in content.lower():
-        html_lowered = content.lower()
+    # Use text_content (code blocks stripped) to avoid false positives
+    # when markdown files contain HTML code examples inside code fences.
+    if filepath.endswith('.html') or "<html" in text_content.lower():
+        html_lowered = text_content.lower()
         semantic_tags = ["<article", "<main", "<header", "<footer", "<nav", "<section"]
         found_tags = [t for t in semantic_tags if t in html_lowered]
         if len(found_tags) >= 3:
@@ -191,12 +408,40 @@ def audit_file(filepath, config, output_format="text"):
         filtered_stats.append(s)
         
     stat_count = len(filtered_stats)
-    if stat_count >= 3:
+
+    # Enhanced: detect verbal/non-numeric statistics
+    verbal_patterns = [
+        # Fractions
+        r'\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:-|—)\s*(?:third|quarter|fifth|sixth|seventh|eighth|ninth|tenth)s?\b',
+        r'\b(?:one|two|three|four|five)\s*-?\s*(?:third|quarter|fifth)s?\b',
+        # Proportional phrases
+        r'\b\d+\s*(?:out\s*of|in)\s*\d+\b',
+        # Multiplier words
+        r'\b(?:double|triple|quadruple|half|twice)\b',
+        # Percentage words
+        r'\b(?:majority|minority|plurality)\b',
+    ]
+
+    verbal_count = 0
+    verbal_matches = []
+    for pattern in verbal_patterns:
+        matches = re.findall(pattern, text_content, re.IGNORECASE)
+        verbal_count += len(matches)
+        if matches:
+            verbal_matches.extend(matches[:3])
+
+    total_stat_count = stat_count + verbal_count
+
+    if total_stat_count >= 3:
         stats_score = 20
-        stats_breakdown = f"High density ({stat_count} stats found): {', '.join(filtered_stats[:5])}... (+20 pts)"
-    elif stat_count > 0:
+        detail_parts = filtered_stats[:3] + (["..."] if len(filtered_stats) > 3 else [])
+        verbal_sample = verbal_matches[:3] if verbal_matches else []
+        parts_str = ", ".join(detail_parts + verbal_sample) if filtered_stats else ", ".join(verbal_sample)
+        stats_breakdown = f"High density ({total_stat_count} stats found: {parts_str}...) (+20 pts)"
+    elif total_stat_count > 0:
         stats_score = 10
-        stats_breakdown = f"Moderate density ({stat_count} stats found): {', '.join(filtered_stats)} (+10 pts)"
+        all_matches = filtered_stats + verbal_matches
+        stats_breakdown = f"Moderate density ({total_stat_count} stats found: {', '.join(all_matches)}) (+10 pts)"
     else:
         stats_breakdown = "No statistics or numerical evidence found (+0 pts)"
 
@@ -396,34 +641,34 @@ def check_robots(robots_path):
         print(f"Error: Failed to read robots.txt: {e}", file=sys.stderr)
         sys.exit(1)
         
-    ai_agents = [
-        "GPTBot", "Google-Extended", "ClaudeBot", 
-        "PerplexityBot", "Applebot-Extended", "Anthropic-AI"
-    ]
-    
     print("==================================================")
     print("            ROBOTS.TXT CRAWLER AUDIT             ")
     print("==================================================")
     
     blocked_agents = []
     lines = content.split('\n')
-    current_agent = None
-    
+    current_agents = []
+
     for line in lines:
         line = line.strip()
-        if not line or line.startswith('#'):
+        # Blank line starts a new directive block
+        if not line:
+            current_agents = []
             continue
-            
+        if line.startswith('#'):
+            continue
+
         agent_match = re.match(r'^User-agent:\s*(.+)$', line, re.IGNORECASE)
         if agent_match:
-            current_agent = agent_match.group(1).strip()
+            current_agents.append(agent_match.group(1).strip())
             continue
-            
+
         disallow_match = re.match(r'^Disallow:\s*(.+)$', line, re.IGNORECASE)
-        if disallow_match and current_agent:
+        if disallow_match and current_agents:
             disallowed_path = disallow_match.group(1).strip()
-            if disallowed_path in ["/", "/*"] or (current_agent == "*" and disallowed_path in ["/", "/*"]):
-                blocked_agents.append((current_agent, disallowed_path))
+            if disallowed_path in ["/", "/*"]:
+                for agent in current_agents:
+                    blocked_agents.append((agent, disallowed_path))
                 
     if blocked_agents:
         print("WARNING: The following AI agents are blocked from crawling your root directory:")
@@ -435,22 +680,38 @@ def check_robots(robots_path):
         print("Your content is crawler-friendly for generative search engine indexing.")
     print("==================================================")
 
-def generate_schema_data(filepath, schema_type, config):
-    if not os.path.exists(filepath):
-        print(f"Error: File {filepath} not found.", file=sys.stderr)
+def generate_schema_data(filepath, schema_type, config, _content=None):
+    if schema_type not in SUPPORTED_SCHEMA_TYPES:
+        print(
+            f'Error: Unsupported schema type "{schema_type}". '
+            "Expected article, faq, or product.",
+            file=sys.stderr,
+        )
         sys.exit(1)
-        
-    try:
-        with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
-            content = f.read()
-    except Exception as e:
-        print(f"Error: Failed to read file {filepath}: {e}", file=sys.stderr)
-        sys.exit(1)
+
+    # _content is an optional pre-read file body. When provided, the file
+    # existence check and read are skipped — the caller (inject_schema) has
+    # already read the file once to avoid double I/O.
+    content = _content
+    if content is None:
+        if not os.path.exists(filepath):
+            print(f"Error: File {filepath} not found.", file=sys.stderr)
+            sys.exit(1)
+
+        try:
+            with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+        except Exception as e:
+            print(f"Error: Failed to read file {filepath}: {e}", file=sys.stderr)
+            sys.exit(1)
         
     # Strip code blocks to prevent title/description contamination
     clean_text = preprocess_content(content)
-    
+
+    # Try markdown H1 first, then HTML <h1>
     title_match = re.search(r'^#\s+(.+)$', clean_text, re.MULTILINE)
+    if not title_match:
+        title_match = re.search(r'<h1[^>]*>(.+)</h1>', clean_text, re.IGNORECASE)
     title = title_match.group(1).strip() if title_match else "Untitled Document"
     
     intro_match = re.search(r'^#\s+.+?\n\n([^#\n]+)', clean_text, re.DOTALL)
@@ -461,42 +722,60 @@ def generate_schema_data(filepath, schema_type, config):
     author_info = config.get("author", {})
     pub_info = config.get("publisher", {})
     
-    pub_url = pub_info.get("url", "https://example.com").rstrip("/")
-    org_id = f"{pub_url}/#organization"
-    org_node = {
-        "@type": "Organization",
-        "@id": org_id,
-        "name": pub_info.get("name", "Publisher Name"),
-        "url": pub_url
-    }
-    if pub_info.get("logo"):
-        org_node["logo"] = {
-            "@type": "ImageObject",
-            "url": pub_info.get("logo")
+    pub_url_value = pub_info.get("url")
+    pub_url = pub_url_value.strip().rstrip("/") if isinstance(pub_url_value, str) else ""
+    org_id = optional_id(pub_url, "organization")
+    author_id = optional_id(pub_url, "author")
+    graph_nodes = []
+
+    org_node = None
+    if pub_info.get("name") or pub_url:
+        org_node = {"@type": "Organization"}
+        if org_id:
+            org_node["@id"] = org_id
+        if pub_info.get("name"):
+            org_node["name"] = pub_info["name"]
+        if pub_url:
+            org_node["url"] = pub_url
+        if pub_info.get("logo"):
+            org_node["logo"] = {
+                "@type": "ImageObject",
+                "url": pub_info.get("logo"),
+            }
+        if org_id:
+            graph_nodes.append(org_node)
+
+    author_node = None
+    if author_info.get("name"):
+        author_node = {
+            "@type": "Person",
+            "name": author_info["name"],
         }
-        
-    author_id = f"{pub_url}/#author"
-    author_node = {
-        "@type": "Person",
-        "@id": author_id,
-        "name": author_info.get("name", "Author Name"),
-        "jobTitle": author_info.get("jobTitle", "Job Title")
-    }
-    if author_info.get("sameAs"):
-        author_node["sameAs"] = author_info.get("sameAs")
-        
-    graph_nodes = [org_node, author_node]
-    
+        if author_id:
+            author_node["@id"] = author_id
+        if author_info.get("jobTitle"):
+            author_node["jobTitle"] = author_info["jobTitle"]
+        if author_info.get("sameAs"):
+            author_node["sameAs"] = author_info["sameAs"]
+        if author_id:
+            graph_nodes.append(author_node)
+
     if schema_type == "article":
         article_node = {
             "@type": "NewsArticle",
-            "@id": f"{pub_url}/#article",
             "headline": title,
-            "description": description,
-            "datePublished": datetime.now(timezone.utc).isoformat(),
-            "author": {"@id": author_id},
-            "publisher": {"@id": org_id}
         }
+        article_id = optional_id(pub_url, "article")
+        if article_id:
+            article_node["@id"] = article_id
+        if description:
+            article_node["description"] = description
+        if config.get("datePublished"):
+            article_node["datePublished"] = config["datePublished"]
+        if author_node:
+            article_node["author"] = reference_or_inline(author_node, author_id)
+        if org_node:
+            article_node["publisher"] = reference_or_inline(org_node, org_id)
         graph_nodes.append(article_node)
         
         # Robust FAQ extraction using header parsing
@@ -520,9 +799,11 @@ def generate_schema_data(filepath, schema_type, config):
             if qa_list:
                 faq_node = {
                     "@type": "FAQPage",
-                    "@id": f"{pub_url}/#faq",
                     "mainEntity": qa_list
                 }
+                faq_id = optional_id(pub_url, "faq")
+                if faq_id:
+                    faq_node["@id"] = faq_id
                 graph_nodes.append(faq_node)
             
     elif schema_type == "faq":
@@ -549,25 +830,37 @@ def generate_schema_data(filepath, schema_type, config):
             })
         faq_node = {
             "@type": "FAQPage",
-            "@id": f"{pub_url}/#faq",
             "mainEntity": qa_list
         }
+        faq_id = optional_id(pub_url, "faq")
+        if faq_id:
+            faq_node["@id"] = faq_id
         graph_nodes.append(faq_node)
         
     elif schema_type == "product":
         product_node = {
             "@type": "Product",
-            "@id": f"{pub_url}/#product",
             "name": title,
-            "description": description,
-            "brand": {"@id": org_id},
-            "offers": {
-                "@type": "Offer",
-                "priceCurrency": "USD",
-                "availability": "https://schema.org/InStock",
-                "seller": {"@id": org_id}
-            }
         }
+        product_id = optional_id(pub_url, "product")
+        if product_id:
+            product_node["@id"] = product_id
+        if description:
+            product_node["description"] = description
+        if org_node:
+            product_node["brand"] = reference_or_inline(org_node, org_id)
+
+        offer_info = config.get("product", {}).get("offer", {})
+        if offer_info.get("price") is not None and offer_info.get("priceCurrency"):
+            product_node["offers"] = {
+                "@type": "Offer",
+                "price": str(offer_info["price"]),
+                "priceCurrency": offer_info["priceCurrency"],
+            }
+            if offer_info.get("availability"):
+                product_node["offers"]["availability"] = offer_info["availability"]
+            if org_node:
+                product_node["offers"]["seller"] = reference_or_inline(org_node, org_id)
         graph_nodes.append(product_node)
         
     return {
@@ -575,35 +868,46 @@ def generate_schema_data(filepath, schema_type, config):
         "@graph": graph_nodes
     }
 
-def inject_schema(filepath, schema_type, config):
+def inject_schema(filepath, schema_type, config, dry_run=False, no_branding=False):
+    if no_branding:
+        entitlement_error = no_branding_error(config)
+        if entitlement_error:
+            print(f"Error: {entitlement_error}", file=sys.stderr)
+            sys.exit(1)
+
     if not os.path.exists(filepath):
         print(f"Error: File {filepath} not found.", file=sys.stderr)
         sys.exit(1)
-        
-    schema = generate_schema_data(filepath, schema_type, config)
-    schema_json = json.dumps(schema, indent=2, ensure_ascii=False)
-    
+
+    # SEC-01: Validate path is within working directory
+    resolved_path = os.path.abspath(filepath)
+    cwd = os.path.abspath(os.getcwd())
+    if not resolved_path.startswith(cwd + os.sep) and resolved_path != cwd:
+        print(
+            f"Error: Security restriction — target file {filepath} is outside the current working directory.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Read file once; pass to generate_schema_data to avoid double I/O.
     try:
         with open(filepath, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
     except Exception as e:
         print(f"Error: Failed to read file {filepath}: {e}", file=sys.stderr)
         sys.exit(1)
+
+    schema = generate_schema_data(filepath, schema_type, config, content)
+    # Escape "</" to prevent breaking out of <script> tags when
+    # JSON-LD is embedded in HTML (SEC-03).
+    schema_json = json.dumps(schema, indent=2, ensure_ascii=False).replace("</", "<\\/")
         
     schema_pattern = r'```json\s*\{\s*"@context":\s*"https://schema\.org".*?\}\s*```'
     script_pattern = r'<script[^>]*type="application/ld\+json"[^>]*>.*?https://schema\.org.*?</script>'
     
-    signature = config.get("signature")
-    sig_md = ""
-    sig_html = ""
-    
-    if signature:
-        # Check for signature presence by stripping links
-        sig_raw = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', signature)
-        # Check if already present in content
-        if sig_raw not in content:
-            sig_md = f"\n\n{signature}\n"
-            sig_html = f'\n<div class="geo-signature"><p>{signature}</p></div>\n'
+    content = strip_tooltician_branding(content)
+    sig_md = "" if no_branding else f"\n\n{TOOLTICIAN_BRANDING_MARKDOWN}\n"
+    sig_html = "" if no_branding else f"\n{TOOLTICIAN_BRANDING_HTML}\n"
             
     injected_code = f"{sig_md}\n```json\n{schema_json}\n```\n"
     
@@ -630,6 +934,12 @@ def inject_schema(filepath, schema_type, config):
             content += injected_code
             print(f"Successfully appended Schema.org block to markdown file {filepath}.")
             
+    if dry_run:
+        print("=== DRY RUN: The following would be injected ===")
+        print(injected_code)
+        print("=== End of dry run preview ===")
+        return
+
     try:
         with open(filepath, 'w', encoding='utf-8') as f:
             f.write(content)
@@ -640,41 +950,111 @@ def inject_schema(filepath, schema_type, config):
 def main():
     parser = argparse.ArgumentParser(description="GEO (Generative Engine Optimization) Audit and Helper Tool")
     parser.add_argument("--config", help="Path to geo_config.json configuration file")
-    
+
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
-    
+
     # Audit Command
     audit_parser = subparsers.add_parser("audit", help="Audit content for GEO optimization score")
-    audit_parser.add_argument("filepath", help="Path to the markdown or HTML file to audit")
+    audit_parser.add_argument("filepaths", nargs="+", help="Path(s) to the markdown or HTML file(s) to audit")
     audit_parser.add_argument("-f", "--format", choices=["text", "json"], default="text", help="Output format")
-    
+    audit_parser.add_argument("-t", "--threshold", type=int, default=None, help="Exit with code 1 if score is below threshold")
+
     # Robots Command
     robots_parser = subparsers.add_parser("robots", help="Audit robots.txt for AI bot block rules")
     robots_parser.add_argument("filepath", help="Path to robots.txt")
-    
+
     # Schema Command
     schema_parser = subparsers.add_parser("schema", help="Generate JSON-LD schema markup from file content")
     schema_parser.add_argument("filepath", help="Path to markdown or HTML file")
     schema_parser.add_argument("type", choices=["article", "faq", "product"], help="Type of schema to generate")
-    
+
     # Inject Command
     inject_parser = subparsers.add_parser("inject", help="Generate and inject JSON-LD schema block directly into file")
     inject_parser.add_argument("filepath", help="Path to target markdown or HTML file")
     inject_parser.add_argument("type", choices=["article", "faq", "product"], help="Type of schema to generate")
-    
+    inject_parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
+    inject_parser.add_argument("--backup", action="store_true", help="Create .bak file before modifying")
+    inject_parser.add_argument(
+        "--no-branding",
+        action="store_true",
+        help="Remove Tooltician branding (Pro license required)",
+    )
+
+    config_parser = subparsers.add_parser(
+        "config", help="Manage local geo-opt preferences"
+    )
+    config_parser.add_argument("action", choices=["get", "set"])
+    config_parser.add_argument("setting", choices=["reminders"])
+    config_parser.add_argument("value", nargs="?", choices=["true", "false"])
+
     args = parser.parse_args()
-    
+
     config, config_path = load_config(args.config)
-    
+
     if args.command == "audit":
-        audit_file(args.filepath, config, args.format)
+        results = []
+        for fp in args.filepaths:
+            score = audit_file(fp, config, args.format)
+            results.append((fp, score))
+
+        if args.threshold is not None:
+            failures = [(fp, s) for fp, s in results if s < args.threshold]
+            if failures:
+                print(f"\nThreshold not met for {len(failures)} file(s):", file=sys.stderr)
+                for fp, s in failures:
+                    print(f"  {fp}: {s}/100 (threshold: {args.threshold})", file=sys.stderr)
+                sys.exit(1)
+            print(f"\nAll {len(results)} file(s) meet threshold {args.threshold}/100.")
+
     elif args.command == "robots":
         check_robots(args.filepath)
     elif args.command == "schema":
         schema = generate_schema_data(args.filepath, args.type, config)
         print(json.dumps(schema, indent=2, ensure_ascii=False))
     elif args.command == "inject":
-        inject_schema(args.filepath, args.type, config)
+        dry_run = args.dry_run or False
+        backup = args.backup or False
+        no_branding = args.no_branding or False
+
+        if no_branding:
+            entitlement_error = no_branding_error(config)
+            if entitlement_error:
+                print(f"Error: {entitlement_error}", file=sys.stderr)
+                sys.exit(1)
+
+        if backup and not dry_run:
+            backup_path = args.filepath + ".bak"
+            try:
+                import shutil
+                shutil.copy2(args.filepath, backup_path)
+                print(f"Backup created: {backup_path}")
+            except Exception as e:
+                print(f"Error: Failed to create backup {backup_path}: {e}", file=sys.stderr)
+                sys.exit(1)
+
+        inject_schema(
+            args.filepath,
+            args.type,
+            config,
+            dry_run=dry_run,
+            no_branding=no_branding,
+        )
+        if not dry_run:
+            record_successful_free_injection(config)
+    elif args.command == "config":
+        if args.action == "get":
+            print("true" if reminders_are_enabled() else "false")
+        else:
+            if args.value is None:
+                config_parser.error("set reminders requires true or false")
+            enabled = args.value == "true"
+            if not set_reminders_enabled(enabled):
+                print(
+                    "Error: Could not save the local reminder preference.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            print(f"Support reminders {'enabled' if enabled else 'disabled'}.")
     else:
         parser.print_help()
 

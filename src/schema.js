@@ -1,24 +1,69 @@
 import fs from "fs";
 import path from "path";
 import { preprocessContent, cleanMarkdownToPlainText, extractSections } from "./text.js";
+import { getNoBrandingError } from "./licensing.js";
 
-export function generateSchemaData(filepath, schemaType, config) {
-  if (!fs.existsSync(filepath)) {
-    console.error(`Error: File ${filepath} not found.`);
+const TOOLTICIAN_BRANDING_MARKDOWN = "Optimized with [Tooltician](https://www.tooltician.com)";
+const TOOLTICIAN_BRANDING_HTML =
+  '<div class="geo-signature"><p>Optimized with <a href="https://www.tooltician.com">Tooltician</a></p></div>';
+const SUPPORTED_SCHEMA_TYPES = new Set(["article", "faq", "product"]);
+
+function optionalId(baseUrl, fragment) {
+  return baseUrl ? `${baseUrl}/#${fragment}` : null;
+}
+
+function referenceOrInline(node, id) {
+  return id ? { "@id": id } : node;
+}
+
+function stripToolticianBranding(content) {
+  return content
+    .replace(
+      /\n{0,2}Optimized (?:by|with) \[Tooltician\]\(https?:\/\/(?:www\.)?tooltician\.com\/?\)\s*/gi,
+      "\n"
+    )
+    .replace(
+      /\s*<div[^>]*class=["'][^"']*\bgeo-signature\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*/gi,
+      "\n"
+    );
+}
+
+// _content is an optional pre-read file body. When provided, the file
+// existence check and read are skipped — the caller (injectSchema) has
+// already read the file once to avoid double I/O.
+export function generateSchemaData(filepath, schemaType, config, _content = null) {
+  if (!SUPPORTED_SCHEMA_TYPES.has(schemaType)) {
+    console.error(
+      `Error: Unsupported schema type "${schemaType}". Expected article, faq, or product.`
+    );
     process.exit(1);
+    return;
   }
 
-  let content = "";
-  try {
-    content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
-  } catch (e) {
-    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-    process.exit(1);
+  let content = _content;
+  if (content === null) {
+    if (!fs.existsSync(filepath)) {
+      console.error(`Error: File ${filepath} not found.`);
+      process.exit(1);
+      return;
+    }
+
+    try {
+      content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
+    } catch (e) {
+      console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
+      process.exit(1);
+      return;
+    }
   }
 
   const cleanText = preprocessContent(content);
 
-  const titleMatch = cleanText.match(/^#\s+(.+)$/m);
+  // Try markdown H1 first, then HTML <h1>
+  let titleMatch = cleanText.match(/^#\s+(.+)$/m);
+  if (!titleMatch) {
+    titleMatch = cleanText.match(/<h1[^>]*>(.+)<\/h1>/i);
+  }
   const title = titleMatch ? titleMatch[1].trim() : "Untitled Document";
 
   const introMatch = cleanText.match(/^#\s+.+?\n\n([^#\n]+)/s);
@@ -30,44 +75,54 @@ export function generateSchemaData(filepath, schemaType, config) {
   const authorInfo = config.author || {};
   const pubInfo = config.publisher || {};
 
-  const pubUrl = (pubInfo.url || "https://example.com").replace(/\/+$/, "");
-  const orgId = `${pubUrl}/#organization`;
-  const orgNode = {
-    "@type": "Organization",
-    "@id": orgId,
-    name: pubInfo.name || "Publisher Name",
-    url: pubUrl,
-  };
-  if (pubInfo.logo) {
-    orgNode.logo = {
-      "@type": "ImageObject",
-      url: pubInfo.logo,
+  const pubUrl =
+    typeof pubInfo.url === "string" && pubInfo.url.trim()
+      ? pubInfo.url.trim().replace(/\/+$/, "")
+      : "";
+  const orgId = optionalId(pubUrl, "organization");
+  const authorId = optionalId(pubUrl, "author");
+  const graphNodes = [];
+
+  let orgNode = null;
+  if (pubInfo.name || pubUrl) {
+    orgNode = {
+      "@type": "Organization",
     };
+    if (orgId) orgNode["@id"] = orgId;
+    if (pubInfo.name) orgNode.name = pubInfo.name;
+    if (pubUrl) orgNode.url = pubUrl;
+    if (pubInfo.logo) {
+      orgNode.logo = {
+        "@type": "ImageObject",
+        url: pubInfo.logo,
+      };
+    }
+    if (orgId) graphNodes.push(orgNode);
   }
 
-  const authorId = `${pubUrl}/#author`;
-  const authorNode = {
-    "@type": "Person",
-    "@id": authorId,
-    name: authorInfo.name || "Author Name",
-    jobTitle: authorInfo.jobTitle || "Job Title",
-  };
-  if (authorInfo.sameAs) {
-    authorNode.sameAs = authorInfo.sameAs;
+  let authorNode = null;
+  if (authorInfo.name) {
+    authorNode = {
+      "@type": "Person",
+      name: authorInfo.name,
+    };
+    if (authorId) authorNode["@id"] = authorId;
+    if (authorInfo.jobTitle) authorNode.jobTitle = authorInfo.jobTitle;
+    if (authorInfo.sameAs) authorNode.sameAs = authorInfo.sameAs;
+    if (authorId) graphNodes.push(authorNode);
   }
-
-  const graphNodes = [orgNode, authorNode];
 
   if (schemaType === "article") {
     const articleNode = {
       "@type": "NewsArticle",
-      "@id": `${pubUrl}/#article`,
       headline: title,
-      description: description,
-      datePublished: new Date().toISOString(),
-      author: { "@id": authorId },
-      publisher: { "@id": orgId },
     };
+    const articleId = optionalId(pubUrl, "article");
+    if (articleId) articleNode["@id"] = articleId;
+    if (description) articleNode.description = description;
+    if (config.datePublished) articleNode.datePublished = config.datePublished;
+    if (authorNode) articleNode.author = referenceOrInline(authorNode, authorId);
+    if (orgNode) articleNode.publisher = referenceOrInline(orgNode, orgId);
     graphNodes.push(articleNode);
 
     // FAQ extraction
@@ -95,9 +150,10 @@ export function generateSchemaData(filepath, schemaType, config) {
       if (qaList.length > 0) {
         const faqNode = {
           "@type": "FAQPage",
-          "@id": `${pubUrl}/#faq`,
           mainEntity: qaList,
         };
+        const faqId = optionalId(pubUrl, "faq");
+        if (faqId) faqNode["@id"] = faqId;
         graphNodes.push(faqNode);
       }
     }
@@ -124,24 +180,35 @@ export function generateSchemaData(filepath, schemaType, config) {
     }
     const faqNode = {
       "@type": "FAQPage",
-      "@id": `${pubUrl}/#faq`,
       mainEntity: qaList,
     };
+    const faqId = optionalId(pubUrl, "faq");
+    if (faqId) faqNode["@id"] = faqId;
     graphNodes.push(faqNode);
   } else if (schemaType === "product") {
     const productNode = {
       "@type": "Product",
-      "@id": `${pubUrl}/#product`,
       name: title,
-      description: description,
-      brand: { "@id": orgId },
-      offers: {
-        "@type": "Offer",
-        priceCurrency: "USD",
-        availability: "https://schema.org/InStock",
-        seller: { "@id": orgId },
-      },
     };
+    const productId = optionalId(pubUrl, "product");
+    if (productId) productNode["@id"] = productId;
+    if (description) productNode.description = description;
+    if (orgNode) productNode.brand = referenceOrInline(orgNode, orgId);
+
+    const offerInfo = config.product?.offer;
+    if (offerInfo?.price !== undefined && offerInfo?.priceCurrency) {
+      productNode.offers = {
+        "@type": "Offer",
+        price: String(offerInfo.price),
+        priceCurrency: offerInfo.priceCurrency,
+      };
+      if (offerInfo.availability) {
+        productNode.offers.availability = offerInfo.availability;
+      }
+      if (orgNode) {
+        productNode.offers.seller = referenceOrInline(orgNode, orgId);
+      }
+    }
     graphNodes.push(productNode);
   }
 
@@ -151,10 +218,24 @@ export function generateSchemaData(filepath, schemaType, config) {
   };
 }
 
-export function injectSchema(filepath, schemaType, config, dryRun = false) {
+export function injectSchema(filepath, schemaType, config, options = {}) {
+  const normalizedOptions = typeof options === "boolean" ? { dryRun: options } : options;
+  const dryRun = normalizedOptions.dryRun ?? false;
+  const noBranding = normalizedOptions.noBranding ?? false;
+
+  if (noBranding) {
+    const entitlementError = getNoBrandingError(config);
+    if (entitlementError) {
+      console.error(`Error: ${entitlementError}`);
+      process.exit(1);
+      return;
+    }
+  }
+
   if (!fs.existsSync(filepath)) {
     console.error(`Error: File ${filepath} not found.`);
     process.exit(1);
+    return;
   }
 
   // SEC-01: Validate path is within working directory
@@ -165,51 +246,31 @@ export function injectSchema(filepath, schemaType, config, dryRun = false) {
       `Error: Security restriction — target file ${filepath} is outside the current working directory.`
     );
     process.exit(1);
+    return;
   }
 
-  const schema = generateSchemaData(filepath, schemaType, config);
-  const schemaJson = JSON.stringify(schema, null, 2);
-
+  // Read file once; pass to generateSchemaData to avoid double I/O.
   let content = "";
   try {
     content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
   } catch (e) {
     console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
     process.exit(1);
+    return;
   }
+
+  const schema = generateSchemaData(filepath, schemaType, config, content);
+  // Escape "</" to prevent breaking out of <script> tags when
+  // JSON-LD is embedded in HTML (SEC-03).
+  const schemaJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
 
   const schemaPattern = /```json\s*\{\s*"@context":\s*"https:\/\/schema\.org"[\s\S]*?\}\s*```/;
   const scriptPattern =
     /<script[^>]*type="application\/ld\+json"[^>]*>[\s\S]*?https:\/\/schema\.org[\s\S]*?<\/script>/i;
 
-  const signature = config.signature;
-  let sigMd = "";
-  let sigHtml = "";
-
-  if (signature) {
-    // SEC-02: Validate signature format — only allow markdown link syntax [text](https://url) with optional text
-    const sigPattern = /^[^<>\n]*\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)[^<>\n]*$/;
-    if (!sigPattern.test(signature)) {
-      console.error(
-        `Error: Security restriction — signature must contain a markdown link and no HTML tags. Got: ${signature}`
-      );
-      process.exit(1);
-    }
-
-    // Check if signature is already present by stripping markdown link markers
-    const sigRaw = signature.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
-    if (!content.includes(sigRaw)) {
-      const escapedText = signature
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;");
-
-      sigMd = `\n\n${signature}\n`;
-      // For HTML, use the escaped version to prevent XSS
-      sigHtml = `\n<div class="geo-signature"><p>${escapedText}</p></div>\n`;
-    }
-  }
+  content = stripToolticianBranding(content);
+  const sigMd = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
+  const sigHtml = noBranding ? "" : `\n${TOOLTICIAN_BRANDING_HTML}\n`;
 
   let injectedCode = `${sigMd}\n\`\`\`json\n${schemaJson}\n\`\`\`\n`;
 
@@ -250,5 +311,6 @@ export function injectSchema(filepath, schemaType, config, dryRun = false) {
   } catch (e) {
     console.error(`Error: Failed to write to file ${filepath}: ${e.message}`);
     process.exit(1);
+    return;
   }
 }

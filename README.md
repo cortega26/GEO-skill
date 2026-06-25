@@ -1,6 +1,7 @@
 # geo-opt
 
-A zero-dependency Node.js CLI tool for **Generative Engine Optimization (GEO)**.
+A zero-dependency, source-available Node.js CLI tool for **Generative Engine
+Optimization (GEO)**.
 
 `geo-opt` helps content creators, developers, and organizations optimize their web copy (Markdown and HTML) to maximize visibility, retrieval rates, and citations in AI-powered search engines (such as Google Gemini, ChatGPT, Perplexity, and Claude).
 
@@ -17,7 +18,7 @@ A zero-dependency Node.js CLI tool for **Generative Engine Optimization (GEO)**.
     *   *Semantic Pronoun Ambiguity & Acronym Clarity*
 *   **Technical AI Readiness**: Audits HTML structures for semantic HTML5 tags (`<main>`, `<article>`) and flags client-side dynamic rendering setups (`createApp`, `ReactDOM`) that block AI crawler ingestion.
 *   **Stacked `@graph` Schema Injection**: Automatically generates and injects connected JSON-LD schemas linking `Person`, `Organization`, `NewsArticle`, and `FAQPage` together via `@id` references.
-*   **Branding & Signature Citations**: Automatically injects configurable signature blocks (e.g. `Optimized by [Tooltician](https://www.tooltician.com)`) right before schema blocks to create strong entity-association vectors.
+*   **Transparent Tooltician Branding**: Free injections include a visible `Optimized with Tooltician` credit. Tooltician Pro users can disable it with `--no-branding`.
 *   **Crawler Verification**: Inspects `robots.txt` permissions to ensure user-agents like `GPTBot` or `Google-Extended` are allowed.
 *   **Pipeline Friendly**: Support for `--format json` outputs to integrate with CI/CD gates or pre-commit hooks.
 
@@ -35,21 +36,20 @@ npx geo-opt audit path/to/content.md
 
 ## ⚙️ Configuration Setup
 
-Create a `geo_config.json` file in the root of your project directory to customize metadata, acronym registries, and your branding signature:
+Create a `geo_config.json` file in the root of your project directory to customize metadata and acronym registries. Author and publisher data is never inferred: add it only when it accurately describes the content.
 
 ```json
 {
   "author": {
-    "name": "Carlos Ortega González",
-    "jobTitle": "Sr. Software Automation and Data Analyst",
-    "sameAs": "https://www.linkedin.com/in/cortega26/"
+    "name": "Content Author",
+    "jobTitle": "Author Role",
+    "sameAs": "https://example.com/author"
   },
   "publisher": {
-    "name": "Tooltician",
-    "url": "https://www.tooltician.com",
-    "logo": "https://www.tooltician.com/logo.png"
+    "name": "Content Publisher",
+    "url": "https://example.com",
+    "logo": "https://example.com/logo.png"
   },
-  "signature": "Optimized by [Tooltician](https://www.tooltician.com)",
   "acronyms": {
     "AWS": "Amazon Web Services",
     "GDPR": "General Data Protection Regulation",
@@ -58,6 +58,35 @@ Create a `geo_config.json` file in the root of your project directory to customi
   }
 }
 ```
+
+Product offer fields are also opt-in, so the tool never invents pricing or
+availability:
+
+```json
+{
+  "product": {
+    "offer": {
+      "price": "49.00",
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock"
+    }
+  }
+}
+```
+
+Tooltician Pro users can configure their license without placing it on the
+command line:
+
+```json
+{
+  "license": {
+    "key": "tt_pro_your_issued_license_key"
+  }
+}
+```
+
+Alternatively, set `TOOLTICIAN_LICENSE_KEY` in the environment. Do not commit
+license keys to source control.
 
 ---
 
@@ -80,12 +109,37 @@ npx geo-opt schema post.md article
 ```
 *Supported types: `article`, `faq`, `product`*
 
-### 3. Inject Schema & Signature
-Automatically injects the custom signature and stacked schema block directly into your source file:
+### 3. Inject Schema & Branding
+Automatically injects the stacked schema block and the disclosed Tooltician credit directly into your source file:
 ```bash
 npx geo-opt inject post.md article
 ```
 *Note: For Markdown, it appends a JSON code block. For HTML, it safely inserts or replaces a `<script type="application/ld+json">` tag.*
+
+Free injections include a linked `Optimized with Tooltician` credit. Pro users
+can omit or remove that credit:
+
+```bash
+npx geo-opt inject post.md article --no-branding
+```
+
+`--no-branding` requires a Tooltician Pro key in `geo_config.json` or the
+`TOOLTICIAN_LICENSE_KEY` environment variable.
+
+The source-available CLI performs a local entitlement check. This is a convenience
+gate rather than DRM; signed or server-side verification can be added when a
+licensing service is available.
+
+After sustained free, interactive use, geo-opt may print an occasional
+non-blocking support reminder to `stderr`. It never delays execution, appears
+in CI, or contaminates machine-readable output. Disable it permanently with:
+
+```bash
+npx geo-opt config set reminders false
+```
+
+See the [paid offering and roadmap](docs/pro-offering.md) for the current Pro
+benefit and recommended future capabilities.
 
 ### 4. Inspect robots.txt AI Bot Blockages
 Verify that major AI web crawlers are not blocked from indexing your pages:
@@ -106,4 +160,19 @@ npm test
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE).
+Current releases use a dual-license model:
+
+- [Tooltician Community License 1.0](LICENSE): free source-available use with
+  visible Tooltician branding in injected output.
+- [Tooltician Commercial License](COMMERCIAL-LICENSE.md): branding-free and
+  expanded commercial rights for licensed customers.
+
+This is source-available software, not OSI-approved open-source software.
+Historical repository versions through commit `67f18be` remain MIT-licensed;
+see [LICENSE-HISTORY.md](LICENSE-HISTORY.md).
+
+The included license documents are project drafts and should receive
+qualified legal review before paid commercial licenses are issued.
+
+Engineering findings and their current status are maintained in
+[docs/audit-findings.md](docs/audit-findings.md).

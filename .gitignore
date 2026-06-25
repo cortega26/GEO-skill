@@ -30,7 +30,10 @@ dist/
 npm-debug.log*
 
 # Project specific
+.agents/
 .claude/
+.continue/
 .codegraph/
 daemon.pid
 plans/
+CLAUDE.md

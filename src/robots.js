@@ -4,6 +4,7 @@ export function checkRobots(robotsPath) {
   if (!fs.existsSync(robotsPath)) {
     console.error(`Error: robots.txt not found at ${robotsPath}`);
     process.exit(1);
+    return;
   }
 
   let content = "";
@@ -12,16 +13,8 @@ export function checkRobots(robotsPath) {
   } catch (e) {
     console.error(`Error: Failed to read robots.txt: ${e.message}`);
     process.exit(1);
+    return;
   }
-
-  const aiAgents = [
-    "GPTBot",
-    "Google-Extended",
-    "ClaudeBot",
-    "PerplexityBot",
-    "Applebot-Extended",
-    "Anthropic-AI",
-  ];
 
   console.log("==================================================");
   console.log("            ROBOTS.TXT CRAWLER AUDIT             ");
@@ -29,29 +22,32 @@ export function checkRobots(robotsPath) {
 
   const blockedAgents = [];
   const lines = content.split("\n");
-  let currentAgent = null;
+  let currentAgents = [];
 
   for (let line of lines) {
     line = line.trim();
-    if (!line || line.startsWith("#")) {
+    // Blank line starts a new directive block
+    if (!line) {
+      currentAgents = [];
+      continue;
+    }
+    if (line.startsWith("#")) {
       continue;
     }
 
     const agentMatch = line.match(/^User-agent:\s*(.+)$/i);
     if (agentMatch) {
-      currentAgent = agentMatch[1].trim();
+      currentAgents.push(agentMatch[1].trim());
       continue;
     }
 
     const disallowMatch = line.match(/^Disallow:\s*(.+)$/i);
-    if (disallowMatch && currentAgent) {
+    if (disallowMatch && currentAgents.length > 0) {
       const disallowedPath = disallowMatch[1].trim();
-      if (
-        disallowedPath === "/" ||
-        disallowedPath === "/*" ||
-        (currentAgent === "*" && (disallowedPath === "/" || disallowedPath === "/*"))
-      ) {
-        blockedAgents.push({ agent: currentAgent, path: disallowedPath });
+      if (disallowedPath === "/" || disallowedPath === "/*") {
+        for (const agent of currentAgents) {
+          blockedAgents.push({ agent, path: disallowedPath });
+        }
       }
     }
   }

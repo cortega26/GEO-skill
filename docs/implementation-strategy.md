@@ -2,7 +2,7 @@
 
 ## Decision
 
-As of 2025-06-25, **`src/optimizer.js` (JavaScript)** is the canonical implementation of geo-opt. The Python implementation in `.agents/skills/geo-optimization/scripts/geo_optimizer.py` is a secondary port used by the agent skill defined in `SKILL.md`.
+As of 2026-06-25, the modular **`src/` JavaScript implementation** is canonical for geo-opt. The Python implementation in `.agents/skills/geo-optimization/scripts/geo_optimizer.py` is a secondary port used by the agent skill defined in `SKILL.md`.
 
 ## Rationale
 
@@ -24,6 +24,7 @@ When making changes to the canonical JS implementation, apply equivalent changes
 - [ ] `checkRobots` / `check_robots` — agent list, blocking detection
 - [ ] `generateSchemaData` / `generate_schema_data` — schema generation for article, faq, product types; FAQ filters
 - [ ] `injectSchema` / `inject_schema` — signature injection, schema replacement, HTML vs markdown path, path validation, dry-run mode
+- [ ] Licensing and branding — Pro-key resolution and `--no-branding` behavior
 
 ### Known differences (intentional)
 
