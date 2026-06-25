@@ -4,6 +4,7 @@ import re
 import os
 import json
 import argparse
+from datetime import datetime, timezone
 
 # Default thresholds
 MAX_PRONOUN_DENSITY = 0.02
@@ -492,7 +493,7 @@ def generate_schema_data(filepath, schema_type, config):
             "@id": f"{pub_url}/#article",
             "headline": title,
             "description": description,
-            "datePublished": "2026-06-25T12:00:00+00:00",
+            "datePublished": datetime.now(timezone.utc).isoformat(),
             "author": {"@id": author_id},
             "publisher": {"@id": org_id}
         }
@@ -528,6 +529,15 @@ def generate_schema_data(filepath, schema_type, config):
         sections = extract_sections(content)
         qa_list = []
         for q, a in sections[:5]:
+            # Skip sections with empty content or header metadata
+            if len(a) < 15 or q.lower() in [
+                "sources",
+                "references",
+                "citations",
+                "bibliography",
+            ]:
+                continue
+            # Clean answer markdown to plain text for compliant JSON-LD
             clean_answer = clean_markdown_to_plain_text(a)
             qa_list.append({
                 "@type": "Question",

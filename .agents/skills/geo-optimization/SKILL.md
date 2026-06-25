@@ -10,6 +10,11 @@ description: >
 
 # Generative Engine Optimization (GEO) Skill
 
+> **Implementation note**: This skill is backed by two implementations:
+> - **`npx geo-opt`** (JavaScript/Node.js) — the canonical CLI, published to npm. Use for CI/CD and local development.
+> - **`python3 scripts/geo_optimizer.py`** — Python port, used by this skill for agent-driven optimization. Both produce identical results.
+>   See [implementation-strategy.md](../../../docs/implementation-strategy.md) for details.
+
 This skill guides the agent in optimizing web content (HTML, Markdown, copy) to be highly searchable, indexable, and referenceable by Retrieval-Augmented Generation (RAG) pipelines in AI search engines.
 
 It leverages findings from the Princeton GEO framework (presented at KDD 2024), which demonstrates that incorporating specific trust, structure, and readability elements can improve brand visibility and citation frequency in LLM responses by up to 40%.
