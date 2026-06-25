@@ -17,7 +17,7 @@ honor its STOP conditions, and update your row when done.
 | 002  | Corregir 4 bugs críticos (`--config`, `max_pronoun_density`, FAQ filters, fecha hardcodeada) | P1 | S | 001 | DONE |
 | 003  | Expandir cobertura de tests para funciones no testeadas | P2 | M | 002 | DONE |
 | 004  | Hardening de seguridad para `inject` (path validation + signature sanitization) | P1 | S | 001 | DONE |
-| 005  | Features v1.1: CI/CD gate `--threshold`, `--dry-run`, `--backup` | P2 | M | 001 | TODO |
+| 005  | Features v1.1: CI/CD gate `--threshold`, `--dry-run`, `--backup` | P2 | M | 001 | DONE |
 | 006  | Consolidar implementaciones JS y Python | P2 | L | 003 | TODO |
 | 007  | Modularizar `src/optimizer.js` (split god module) | P3 | M | 003 | TODO |
 | 008  | CLI modernization + batch audit + enhanced statistics detection | P3 | M | 005, 007 | TODO |

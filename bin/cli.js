@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "fs";
 import {
   auditFile,
   checkRobots,
@@ -63,7 +64,28 @@ async function main() {
     } else if (fIndex !== -1 && fIndex < cmdArgs.length - 1) {
       format = cmdArgs[fIndex + 1];
     }
-    auditFile(filepath, config, format);
+
+    // Parse --threshold
+    const thresholdIndex = cmdArgs.indexOf("--threshold");
+    const tIndex = cmdArgs.indexOf("-t");
+    let threshold = null;
+    if (thresholdIndex !== -1 && thresholdIndex < cmdArgs.length - 1) {
+      threshold = parseInt(cmdArgs[thresholdIndex + 1], 10);
+    } else if (tIndex !== -1 && tIndex < cmdArgs.length - 1) {
+      threshold = parseInt(cmdArgs[tIndex + 1], 10);
+    }
+
+    const score = auditFile(filepath, config, format);
+
+    if (threshold !== null && !isNaN(threshold)) {
+      if (score < threshold) {
+        console.error(
+          `\nThreshold not met: score ${score}/100 is below required ${threshold}/100.`
+        );
+        process.exit(1);
+      }
+      console.log(`\nThreshold met: score ${score}/100 >= ${threshold}/100.`);
+    }
   } else if (command === "robots") {
     const filepath = cmdArgs[0];
     if (!filepath) {
@@ -87,7 +109,22 @@ async function main() {
       console.error("Error: Missing arguments for inject command. Usage: inject <file> <type>");
       process.exit(1);
     }
-    injectSchema(filepath, type, config);
+
+    const dryRun = cmdArgs.includes("--dry-run");
+    const backup = cmdArgs.includes("--backup");
+
+    if (backup) {
+      const backupPath = filepath + ".bak";
+      try {
+        fs.copyFileSync(filepath, backupPath);
+        console.log(`Backup created: ${backupPath}`);
+      } catch (e) {
+        console.error(`Error: Failed to create backup ${backupPath}: ${e.message}`);
+        process.exit(1);
+      }
+    }
+
+    injectSchema(filepath, type, config, dryRun);
   } else {
     console.error(`Error: Unknown command "${command}"`);
     printHelp();

@@ -719,7 +719,7 @@ export function generateSchemaData(filepath, schemaType, config) {
   };
 }
 
-export function injectSchema(filepath, schemaType, config) {
+export function injectSchema(filepath, schemaType, config, dryRun = false) {
   if (!fs.existsSync(filepath)) {
     console.error(`Error: File ${filepath} not found.`);
     process.exit(1);
@@ -804,6 +804,13 @@ export function injectSchema(filepath, schemaType, config) {
       content += injectedCode;
       console.log(`Successfully appended Schema.org block to markdown file ${filepath}.`);
     }
+  }
+
+  if (dryRun) {
+    console.log("=== DRY RUN: The following would be injected ===");
+    console.log(injectedCode);
+    console.log("=== End of dry run preview ===");
+    return;
   }
 
   try {
