@@ -6,19 +6,30 @@ import path from "path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "url";
 import {
+  aggregateReport,
   auditFile,
+  auditFiles,
+  auditLlmsTxt,
+  batchInject,
   calculateReadability,
   checkRobots,
   cleanMarkdownToPlainText,
+  discoverFiles,
+  extractPageMetadata,
   extractSections,
+  generateLlmsTxt,
+  generateLlmsFullTxt,
+  generateRobotsTxt,
   generateSchemaData,
   getNoBrandingError,
   hasProEntitlement,
   injectSchema,
+  loadConfig,
   preprocessContent,
   readEngagementState,
   recordSuccessfulFreeInjection,
   remindersAreEnabled,
+  scoreContent,
   setRemindersEnabled,
 } from "../src/index.js";
 
@@ -793,5 +804,602 @@ test("injectSchema escapes </script> in JSON-LD to prevent XSS breakout (SEC-03)
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);
     }
+  }
+});
+
+test("cleanHtmlText decodes all standard HTML entities via cheerio", () => {
+  const tempFile = path.join(__dirname, "temp_entity.html");
+  fs.writeFileSync(
+    tempFile,
+    `<html><body>
+    <h1>Test &amp; Price</h1>
+    <p>Cost: &euro;50 &mdash; &copy; 2026 &reg;</p>
+  </body></html>`,
+    { encoding: "utf8" }
+  );
+  try {
+    const schema = generateSchemaData(tempFile, "article", {});
+    const article = schema["@graph"].find((x) => x["@type"] === "NewsArticle");
+    assert.ok(article.description.includes("Cost: €50"));
+    assert.ok(!article.description.includes("&euro;"));
+    assert.ok(!article.description.includes("&mdash;"));
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+test("generateSchemaData extracts meta description regardless of attribute order", () => {
+  const tempFile = path.join(__dirname, "temp_meta_order.html");
+  fs.writeFileSync(
+    tempFile,
+    `<html><head>
+    <meta content="Description first" name="description">
+  </head><body>
+    <h1>Article Title</h1>
+    <p>First paragraph text here.</p>
+  </body></html>`,
+    { encoding: "utf8" }
+  );
+  try {
+    const schema = generateSchemaData(tempFile, "article", {});
+    const article = schema["@graph"].find((x) => x["@type"] === "NewsArticle");
+    assert.strictEqual(article.description, "Description first");
+  } finally {
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+test("auditFile does not count tag names in text as semantic HTML elements", () => {
+  const tempFile = path.join(__dirname, "temp_text_tags.html");
+  fs.writeFileSync(
+    tempFile,
+    `<html><body>
+    <h1>Test</h1>
+    <p>Use the main tag and article element for semantics in your HTML.</p>
+  </body></html>`,
+    { encoding: "utf8" }
+  );
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (message = "") => logs.push(String(message));
+  try {
+    auditFile(tempFile, {}, "text");
+    const output = logs.join("\n");
+    // Should flag LACK of semantic tags, not find them in text
+    assert.ok(
+      output.includes("Lacks HTML5 structural tags") || output.includes("Found only:"),
+      "Should not credit tag names appearing in plain text as semantic HTML"
+    );
+  } finally {
+    console.log = originalLog;
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+test("loadConfig validates a correct config without warnings", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  const configPath = path.join(tmpDir, "geo_config.json");
+  const validConfig = {
+    author: { name: "Test Author", jobTitle: "Writer" },
+    publisher: { name: "Test Corp", url: "https://example.com" },
+    acronyms: { API: "Application Programming Interface" },
+    product: { offer: { price: "49.00", priceCurrency: "USD" } },
+  };
+  fs.writeFileSync(configPath, JSON.stringify(validConfig));
+  try {
+    const { config } = loadConfig(configPath);
+    assert.strictEqual(config.author.name, "Test Author");
+    assert.strictEqual(config.acronyms.API, "Application Programming Interface");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true });
+  }
+});
+
+test("loadConfig exits on invalid config when path is explicit", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  const configPath = path.join(tmpDir, "geo_config.json");
+  const invalidConfig = {
+    author: { name: 12345 }, // name must be string
+  };
+  fs.writeFileSync(configPath, JSON.stringify(invalidConfig));
+  // loadConfig calls process.exit(1) on explicit invalid config.
+  const result = spawnSync(
+    "node",
+    [
+      "-e",
+      `import { loadConfig } from "./src/config.js";
+loadConfig("${configPath}");`,
+    ],
+    { cwd: repoRoot, encoding: "utf8" }
+  );
+  assert.notStrictEqual(result.status, 0, "Invalid explicit config should exit non-zero");
+  assert.ok(
+    result.stderr.includes("Invalid config"),
+    `Expected validation error, got: ${result.stderr}`
+  );
+  fs.rmSync(tmpDir, { recursive: true });
+});
+
+test("extractSections ignores markdown headings inside code blocks", () => {
+  const md = `# Title
+
+## Real Section
+Content here.
+
+\`\`\`markdown
+## Not a real section
+## Neither is this
+\`\`\`
+
+## Another Real Section
+More content.
+  `;
+  const sections = extractSections(md);
+  const headers = sections.map((s) => s.header);
+  assert.deepStrictEqual(headers, ["Real Section", "Another Real Section"]);
+});
+
+test("auditFile counts multi-line blockquotes via marked AST", () => {
+  const tempFile = path.join(__dirname, "temp_multi_quote.md");
+  fs.writeFileSync(
+    tempFile,
+    `# Title
+Intro paragraph for defining the topic briefly here, enough words to pass.
+
+> "This is a multi-line
+> expert quote that spans
+> several lines," said the expert.
+
+Second paragraph with more substantial content and text here.
+
+> Another single-line quote from an authority on the matter.
+  `,
+    { encoding: "utf8" }
+  );
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (message = "") => logs.push(String(message));
+  try {
+    auditFile(tempFile, {}, "json");
+    const report = JSON.parse(logs.join("\n"));
+    assert.strictEqual(report.breakdown.quotations.score, 20); // 2 blockquotes = max
+  } finally {
+    console.log = originalLog;
+    if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Whole-website batch capabilities (plans/quizzical-hugging-lollipop)
+// ═══════════════════════════════════════════════════════════════════
+
+test("scoreContent returns score and full report object", () => {
+  const content =
+    "# Test\n\nThis is an introduction paragraph with enough words to reach forty characters easily here yes.\n\n## Section\nBody with 42% evidence.";
+  const result = scoreContent(content, "/tmp/test.md", {});
+  assert.strictEqual(typeof result.score, "number");
+  assert.ok(result.score >= 0 && result.score <= 100);
+  assert.ok(typeof result.report, "object");
+  assert.ok(result.report.total_score !== undefined);
+  assert.ok(Array.isArray(result.report.recommendations));
+  assert.ok(result.report.breakdown.structure.score <= 20);
+});
+
+test("scoreContent handles empty content gracefully", () => {
+  const result = scoreContent("", "/tmp/empty.md", {});
+  assert.strictEqual(typeof result.score, "number");
+  assert.ok(result.report);
+});
+
+test("discoverFiles finds files in directory tree", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(path.join(tmpDir, "a.md"), "# A");
+    fs.mkdirSync(path.join(tmpDir, "sub"));
+    fs.writeFileSync(path.join(tmpDir, "sub", "b.html"), "<h1>B</h1>");
+    fs.writeFileSync(path.join(tmpDir, "sub", "c.txt"), "text"); // excluded
+
+    const files = discoverFiles([tmpDir], { recursive: true });
+    assert.strictEqual(files.length, 2);
+    assert.ok(files.some((f) => f.endsWith("a.md")));
+    assert.ok(files.some((f) => f.endsWith("b.html")));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("discoverFiles throws on directory without --recursive", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    assert.throws(() => discoverFiles([tmpDir], { recursive: false }), /directory/i);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("discoverFiles respects ignore patterns", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(path.join(tmpDir, "keep.md"), "# K");
+    fs.writeFileSync(path.join(tmpDir, "draft.md"), "# D");
+    const files = discoverFiles([tmpDir], {
+      recursive: true,
+      ignorePatterns: ["draft.md"],
+    });
+    assert.strictEqual(files.length, 1);
+    assert.ok(files[0].endsWith("keep.md"));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("discoverFiles loads .gitignore automatically", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(path.join(tmpDir, ".gitignore"), "secret.md\nbuild/\n");
+    fs.writeFileSync(path.join(tmpDir, "secret.md"), "# S");
+    fs.writeFileSync(path.join(tmpDir, "public.md"), "# P");
+    fs.mkdirSync(path.join(tmpDir, "build"));
+    fs.writeFileSync(path.join(tmpDir, "build", "out.html"), "<h1>B</h1>");
+    const files = discoverFiles([tmpDir], { recursive: true, cwd: tmpDir });
+    assert.strictEqual(files.length, 1);
+    assert.ok(files[0].endsWith("public.md"));
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("discoverFiles skips dot-prefixed entries without .gitignore", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    // Archivos dot-prefixed deben ser excluidos
+    fs.writeFileSync(path.join(tmpDir, ".secret.md"), "# Secret\n\nHidden content here.\n");
+    fs.writeFileSync(path.join(tmpDir, "public.md"), "# Public\n\nVisible content here.\n");
+    // Subdirectorio dot-prefixed también debe ser excluido
+    fs.mkdirSync(path.join(tmpDir, ".hidden"));
+    fs.writeFileSync(
+      path.join(tmpDir, ".hidden", "inside.md"),
+      "# Inside\n\nContent inside hidden dir.\n"
+    );
+    const files = discoverFiles([tmpDir], { recursive: true });
+    assert.strictEqual(files.length, 1, "Only public.md should be discovered");
+    assert.ok(files[0].endsWith("public.md"), `Expected public.md, got ${files[0]}`);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("aggregateReport computes correct statistics", () => {
+  const results = [
+    { file: "a.md", status: "success", score: 80, report: { recommendations: ["Add links"] } },
+    {
+      file: "b.md",
+      status: "success",
+      score: 60,
+      report: { recommendations: ["Add links", "Add quotes"] },
+    },
+    { file: "c.md", status: "error", error: "not found" },
+  ];
+  const summary = aggregateReport(results);
+  assert.strictEqual(summary.totalFiles, 3);
+  assert.strictEqual(summary.succeeded, 2);
+  assert.strictEqual(summary.failed, 1);
+  assert.strictEqual(summary.averageScore, 70);
+  assert.strictEqual(summary.minScore, 60);
+  assert.strictEqual(summary.maxScore, 80);
+  assert.strictEqual(summary.topRecommendations.length, 2);
+  assert.strictEqual(summary.worstFiles.length, 2);
+  assert.strictEqual(summary.worstFiles[0].file, "b.md");
+});
+
+test("aggregateReport handles zero successes", () => {
+  const results = [{ file: "a.md", status: "error", error: "bad" }];
+  const summary = aggregateReport(results);
+  assert.strictEqual(summary.succeeded, 0);
+  assert.strictEqual(summary.failed, 1);
+  assert.ok(summary.message);
+});
+
+test("auditFiles collects errors without crashing", () => {
+  const results = auditFiles(["/nonexistent/file.md"], {});
+  assert.strictEqual(results.length, 1);
+  assert.strictEqual(results[0].status, "error");
+});
+
+test("auditFiles mixes successes and failures", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    const goodFile = path.join(tmpDir, "good.md");
+    fs.writeFileSync(
+      goodFile,
+      "# Test\n\nIntro paragraph with over forty words of content to reach minimum for scoring here.\n"
+    );
+    const results = auditFiles([goodFile, "/nonexistent/bad.md"], {});
+    assert.strictEqual(results.length, 2);
+    const good = results.find((r) => r.status === "success");
+    const bad = results.find((r) => r.status === "error");
+    assert.ok(good, "should have one success");
+    assert.ok(bad, "should have one error");
+    assert.strictEqual(typeof good.score, "number");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("CLI audit --recursive finds files in directory", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, "test.md"),
+      "# Test\n\nContent with 42% evidence and enough words for scoring here.\n"
+    );
+    const result = spawnSync(
+      process.execPath,
+      [cliPath, "audit", tmpDir, "--recursive", "--format", "json"],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(result.status, 0, result.stderr);
+    const payload = JSON.parse(result.stdout);
+    // Single file returns object, multiple returns array (legacy behavior)
+    const reports = Array.isArray(payload) ? payload : [payload];
+    assert.strictEqual(reports.length, 1);
+    assert.strictEqual(typeof reports[0].total_score, "number");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("CLI audit --summary produces aggregate report", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, "a.md"),
+      "# A\n\nIntro paragraph with forty plus words of content for scoring minimum here.\n"
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "b.md"),
+      "# B\n\nAnother intro paragraph with enough words now for scoring requirements.\n"
+    );
+    const result = spawnSync(
+      process.execPath,
+      [cliPath, "audit", tmpDir, "--recursive", "--summary", "--format", "json"],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(result.status, 0, result.stderr);
+    const summary = JSON.parse(result.stdout);
+    assert.strictEqual(summary.totalFiles, 2);
+    assert.strictEqual(summary.succeeded, 2);
+    assert.strictEqual(typeof summary.averageScore, "number");
+    assert.strictEqual(typeof summary.medianScore, "number");
+    assert.ok(Array.isArray(summary.topRecommendations));
+    assert.ok(Array.isArray(summary.worstFiles));
+    assert.ok(Array.isArray(summary.perFile));
+    assert.ok("distribution" in summary);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("CLI inject --recursive processes multiple files", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(path.join(tmpDir, "page1.md"), "# Page 1\n\nContent.\n");
+    fs.writeFileSync(path.join(tmpDir, "page2.md"), "# Page 2\n\nContent.\n");
+    const result = spawnSync(
+      process.execPath,
+      [cliPath, "inject", tmpDir, "article", "--recursive", "--dry-run"],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(result.status, 0, result.stderr);
+    assert.ok(
+      result.stdout.includes("2 file(s)"),
+      `Expected 2 files in dry-run output, got: ${result.stdout}`
+    );
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+test("batchInject injects schema and branding into markdown files", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    const goodFile = path.join(tmpDir, "test.md");
+    fs.writeFileSync(goodFile, "# Test\n\nBody content here.\n");
+    const result = batchInject([goodFile], "article", {});
+    assert.strictEqual(result.successCount, 1);
+    assert.strictEqual(result.failCount, 0);
+    const content = fs.readFileSync(goodFile, "utf8");
+    assert.ok(content.includes("```json"), "Should contain JSON-LD block");
+    assert.ok(content.includes("Optimized with [Tooltician]"), "Should contain branding");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// llms.txt generation, audit, and robots.txt generation
+// ═══════════════════════════════════════════════════════════════════
+
+test("extractPageMetadata extracts title and description from markdown", () => {
+  const md = `# My Test Page
+
+This is an introduction paragraph that describes what the page is about in sufficient detail.
+
+## Section One
+Content here.
+
+## Section Two
+More content.`;
+  const meta = extractPageMetadata(md, "/tmp/test.md");
+  assert.strictEqual(meta.title, "My Test Page");
+  assert.ok(meta.description.length > 10);
+  assert.strictEqual(meta.sections.length, 2);
+});
+
+test("extractPageMetadata handles missing title gracefully", () => {
+  const md = "Just some content without a heading.\n\nMore text here.";
+  const meta = extractPageMetadata(md, "/tmp/notitle.md");
+  assert.strictEqual(meta.title, "notitle");
+});
+
+test("generateLlmsTxt produces valid structure with all sections", () => {
+  const entries = [
+    { title: "Home", description: "Welcome page", url: "https://example.com/", section: "Main" },
+    {
+      title: "API",
+      description: "API reference",
+      url: "https://example.com/docs/api",
+      section: "Docs",
+    },
+    { title: "Old Archive", description: "2024 posts", url: "https://example.com/archive" },
+  ];
+  const result = generateLlmsTxt(entries, {
+    siteTitle: "Test Site",
+    siteDescription: "A test site.",
+  });
+  assert.ok(result.startsWith("# Test Site"));
+  assert.ok(result.includes("> A test site."));
+  assert.ok(result.includes("## Main"));
+  assert.ok(result.includes("## Docs"));
+  assert.ok(result.includes("[Home](https://example.com/)"));
+  assert.ok(result.includes("[API](https://example.com/docs/api)"));
+  assert.ok(result.includes("[Old Archive](https://example.com/archive)"));
+});
+
+test("generateLlmsTxt puts low-score pages in Optional", () => {
+  const entries = [
+    { title: "Good", url: "https://example.com/good", description: "x", score: 80 },
+    { title: "Weak", url: "https://example.com/weak", description: "x", score: 30 },
+  ];
+  const result = generateLlmsTxt(entries, {
+    siteTitle: "Test",
+    optionalThreshold: 50,
+  });
+  assert.ok(result.includes("## Optional"));
+  assert.ok(result.includes("[Weak]"));
+  const mainStart = result.indexOf("## ");
+  const optionalStart = result.indexOf("## Optional");
+  assert.ok(optionalStart > mainStart, "Optional should come after main sections");
+});
+
+test("generateLlmsFullTxt compiles full page content", () => {
+  const entries = [
+    {
+      title: "Page One",
+      url: "https://example.com/one",
+      content: "# Page One\n\nFirst paragraph here.\n\nSecond paragraph.",
+    },
+  ];
+  const result = generateLlmsFullTxt(entries, { siteTitle: "Test" });
+  assert.ok(result.includes("# Test — Full Content"));
+  assert.ok(result.includes("## [Page One](https://example.com/one)"));
+  assert.ok(result.includes("First paragraph here."));
+  assert.ok(result.includes("Second paragraph."));
+});
+
+test("auditLlmsTxt reports valid llms.txt as valid", () => {
+  const content = `# My Site
+
+> A sample site.
+
+## Pages
+
+- [Home](https://example.com/): The homepage.
+- [About](https://example.com/about): About us.
+`;
+  const report = auditLlmsTxt(content);
+  assert.strictEqual(report.valid, true);
+  assert.strictEqual(report.issues.length, 0);
+});
+
+test("auditLlmsTxt detects missing H1 and blockquote", () => {
+  const content = `## Pages
+
+- [Home](https://example.com/): Homepage.
+`;
+  const report = auditLlmsTxt(content);
+  assert.strictEqual(report.valid, false);
+  assert.ok(
+    report.issues.some((i) => i.includes("H1")),
+    "Should report missing H1"
+  );
+  assert.ok(
+    report.issues.some((i) => i.includes("blockquote")),
+    "Should report missing blockquote"
+  );
+});
+
+test("generateRobotsTxt includes all AI crawlers and disallow paths", () => {
+  const result = generateRobotsTxt({
+    disallowPaths: ["/admin", "/api"],
+    sitemapUrl: "https://example.com/sitemap.xml",
+  });
+  assert.ok(result.includes("GPTBot"));
+  assert.ok(result.includes("ClaudeBot"));
+  assert.ok(result.includes("Google-Extended"));
+  assert.ok(result.includes("PerplexityBot"));
+  assert.ok(result.includes("Disallow: /admin"));
+  assert.ok(result.includes("Disallow: /api"));
+  assert.ok(result.includes("Sitemap: https://example.com/sitemap.xml"));
+});
+
+test("generateRobotsTxt uses default disallow when none provided", () => {
+  const result = generateRobotsTxt();
+  assert.ok(result.includes("Disallow: /admin"));
+  assert.ok(result.includes("Disallow: /api"));
+  assert.ok(result.includes("Disallow: /private"));
+});
+
+// CLI integration tests
+test("CLI robots generate --dry-run outputs expected content", () => {
+  const result = spawnSync(process.execPath, [cliPath, "robots", "generate", "--dry-run"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+  });
+  assert.strictEqual(result.status, 0, result.stderr);
+  assert.ok(result.stdout.includes("GPTBot"), "Should include GPTBot");
+  assert.ok(result.stdout.includes("Allow: /"), "Should allow root");
+  assert.ok(result.stdout.includes("[dry-run]"), "Should mark as dry-run");
+});
+
+test("CLI llmstxt generate --dry-run outputs expected content", () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "geo-test-"));
+  try {
+    fs.writeFileSync(
+      path.join(tmpDir, "index.md"),
+      "# Home\n\nWelcome to our test site with enough words to describe the project here.\n"
+    );
+    fs.writeFileSync(
+      path.join(tmpDir, "about.md"),
+      "# About\n\nAbout our company with sufficient detail for the description text.\n"
+    );
+    const result = spawnSync(
+      process.execPath,
+      [
+        cliPath,
+        "llmstxt",
+        "generate",
+        tmpDir,
+        "--recursive",
+        "--site-url",
+        "https://example.com",
+        "--title",
+        "Test Site",
+        "--description",
+        "A test site for GEO.",
+        "--dry-run",
+      ],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes("# Test Site"), "Should have site title");
+    assert.ok(result.stdout.includes("> A test site for GEO."), "Should have description");
+    assert.ok(
+      result.stdout.includes("Welcome to our test site"),
+      "Should include page description"
+    );
+    assert.ok(result.stdout.includes("[dry-run]"), "Should mark as dry-run");
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 });
