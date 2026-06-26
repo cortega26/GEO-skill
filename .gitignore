@@ -23,6 +23,7 @@ Thumbs.db
 
 # Build output
 dist/
+coverage/
 *.tsbuildinfo
 
 # Logs
@@ -41,6 +42,7 @@ npm-debug.log*
 .agents/skills/geo-optimization/**/*.local.*
 
 # Project specific
+geo_config.json
 .claude/
 .continue/
 .codegraph/
