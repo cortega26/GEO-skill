@@ -1,5 +1,104 @@
 import fs from "fs";
 
+const AI_CRAWLER_AGENTS = [
+  "GPTBot",
+  "ChatGPT-User",
+  "OAI-SearchBot",
+  "ClaudeBot",
+  "Claude-SearchBot",
+  "Claude-User",
+  "PerplexityBot",
+  "Google-Extended",
+  "Applebot-Extended",
+  "Meta-ExternalAgent",
+  "Bytespider",
+  "CCBot",
+  "Amazonbot",
+  "anthropic-ai",
+];
+
+function parseRobotsGroups(content) {
+  const groups = [];
+  let current = null;
+
+  for (let rawLine of content.split("\n")) {
+    rawLine = rawLine.replace(/#.*/, "").trim();
+    if (!rawLine) {
+      current = null;
+      continue;
+    }
+
+    const agentMatch = rawLine.match(/^User-agent:\s*(.+)$/i);
+    if (agentMatch) {
+      if (!current || current.rules.length > 0) {
+        current = { agents: [], rules: [] };
+        groups.push(current);
+      }
+      current.agents.push(agentMatch[1].trim());
+      continue;
+    }
+
+    const ruleMatch = rawLine.match(/^(Allow|Disallow):\s*(.*)$/i);
+    if (ruleMatch && current) {
+      current.rules.push({
+        directive: ruleMatch[1].toLowerCase(),
+        path: ruleMatch[2].trim(),
+      });
+    }
+  }
+
+  return groups;
+}
+
+function agentApplies(agentPattern, targetAgent) {
+  if (agentPattern === "*") {
+    return true;
+  }
+  return targetAgent.toLowerCase().includes(agentPattern.toLowerCase());
+}
+
+function selectGroup(groups, targetAgent) {
+  let selected = null;
+  let selectedLength = -1;
+
+  for (const group of groups) {
+    for (const agent of group.agents) {
+      if (agentApplies(agent, targetAgent) && agent.length > selectedLength) {
+        selected = group;
+        selectedLength = agent.length;
+      }
+    }
+  }
+
+  return selected;
+}
+
+function ruleMatchesRoot(path) {
+  return path === "/" || path === "/*";
+}
+
+function blocksRoot(group) {
+  if (!group) {
+    return false;
+  }
+
+  let strongestRule = null;
+  for (const rule of group.rules) {
+    if (!rule.path || !ruleMatchesRoot(rule.path)) {
+      continue;
+    }
+    if (
+      !strongestRule ||
+      rule.path.length > strongestRule.path.length ||
+      (rule.path.length === strongestRule.path.length && rule.directive === "allow")
+    ) {
+      strongestRule = rule;
+    }
+  }
+
+  return strongestRule?.directive === "disallow";
+}
+
 export function checkRobots(robotsPath) {
   if (!fs.existsSync(robotsPath)) {
     console.error(`Error: robots.txt not found at ${robotsPath}`);
@@ -20,42 +119,26 @@ export function checkRobots(robotsPath) {
   console.log("            ROBOTS.TXT CRAWLER AUDIT             ");
   console.log("==================================================");
 
+  const groups = parseRobotsGroups(content);
   const blockedAgents = [];
-  const lines = content.split("\n");
-  let currentAgents = [];
 
-  for (let line of lines) {
-    line = line.trim();
-    // Blank line starts a new directive block
-    if (!line) {
-      currentAgents = [];
-      continue;
-    }
-    if (line.startsWith("#")) {
-      continue;
-    }
-
-    const agentMatch = line.match(/^User-agent:\s*(.+)$/i);
-    if (agentMatch) {
-      currentAgents.push(agentMatch[1].trim());
-      continue;
-    }
-
-    const disallowMatch = line.match(/^Disallow:\s*(.+)$/i);
-    if (disallowMatch && currentAgents.length > 0) {
-      const disallowedPath = disallowMatch[1].trim();
-      if (disallowedPath === "/" || disallowedPath === "/*") {
-        for (const agent of currentAgents) {
-          blockedAgents.push({ agent, path: disallowedPath });
-        }
-      }
+  for (const agent of AI_CRAWLER_AGENTS) {
+    const group = selectGroup(groups, agent);
+    if (blocksRoot(group)) {
+      blockedAgents.push({ agent });
     }
   }
 
-  if (blockedAgents.length > 0) {
+  const wildcardGroup = selectGroup(groups, "*");
+  const wildcardBlocksRoot = blocksRoot(wildcardGroup);
+
+  if (blockedAgents.length > 0 || wildcardBlocksRoot) {
     console.log("WARNING: The following AI agents are blocked from crawling your root directory:");
+    if (wildcardBlocksRoot) {
+      console.log("  - User-agent: * (root access blocked for crawlers without a specific allow)");
+    }
     for (const b of blockedAgents) {
-      console.log(`  - User-agent: ${b.agent} (Disallow: ${b.path})`);
+      console.log(`  - User-agent: ${b.agent} (root access blocked)`);
     }
     console.log(
       "\nNote: Blocking these crawlers prevents AI engines from indexing your content and citing your pages."

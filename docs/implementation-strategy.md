@@ -7,7 +7,9 @@ As of 2026-06-25, the modular **`src/` JavaScript implementation** is canonical 
 ## Rationale
 
 1. **Public interface**: The npm package `geo-opt` is the documented public CLI (`README.md`). The `bin` entry in `package.json` makes it available via `npx geo-opt`.
-2. **CI/CD**: `npm test` is the automated verification path. Python tests exist but are not integrated into `npm run check`.
+2. **CI/CD**: `npm run check` is the automated verification path and includes
+   JavaScript linting, formatting, JavaScript tests, Python parity tests, and
+   changelog policy enforcement.
 3. **Feature recency**: JS has received more recent fixes (plan 002 fixed 4 bugs in JS; Python equivalents may still be unfixed).
 
 ## Keeping them in sync

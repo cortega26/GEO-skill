@@ -4,6 +4,8 @@ import re
 import os
 import json
 import argparse
+import contextlib
+import io
 from datetime import datetime, timezone
 
 # Default thresholds
@@ -20,6 +22,22 @@ REMINDER_INJECTION_INTERVAL = 10
 REMINDER_COOLDOWN_SECONDS = 7 * 24 * 60 * 60
 STATE_DIR_ENV_VAR = "GEO_OPT_STATE_DIR"
 SUPPORT_URL = "https://www.tooltician.com"
+AI_CRAWLER_AGENTS = [
+    "GPTBot",
+    "ChatGPT-User",
+    "OAI-SearchBot",
+    "ClaudeBot",
+    "Claude-SearchBot",
+    "Claude-User",
+    "PerplexityBot",
+    "Google-Extended",
+    "Applebot-Extended",
+    "Meta-ExternalAgent",
+    "Bytespider",
+    "CCBot",
+    "Amazonbot",
+    "anthropic-ai",
+]
 
 
 def resolve_license_key(config, env=None):
@@ -216,6 +234,71 @@ def strip_tooltician_branding(content):
         flags=re.DOTALL | re.IGNORECASE,
     )
 
+
+def is_inside_directory(candidate_path, directory_path):
+    relative_path = os.path.relpath(candidate_path, directory_path)
+    return relative_path == "." or not (
+        relative_path == ".." or relative_path.startswith(f"..{os.sep}") or os.path.isabs(relative_path)
+    )
+
+
+def assert_writable_target_inside_cwd(filepath):
+    try:
+        target_real_path = os.path.realpath(filepath)
+        cwd_real_path = os.path.realpath(os.getcwd())
+    except OSError as exc:
+        print(f"Error: Failed to resolve real path for {filepath}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not is_inside_directory(target_real_path, cwd_real_path):
+        print(
+            f"Error: Security restriction — target file {filepath} resolves outside the current working directory.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return target_real_path, cwd_real_path
+
+
+def assert_new_file_parent_inside_cwd(filepath):
+    try:
+        parent_real_path = os.path.realpath(os.path.dirname(filepath) or ".")
+        cwd_real_path = os.path.realpath(os.getcwd())
+    except OSError as exc:
+        print(f"Error: Failed to resolve real path for {filepath}: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if not is_inside_directory(parent_real_path, cwd_real_path):
+        print(
+            f"Error: Security restriction — output path {filepath} resolves outside the current working directory.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return parent_real_path, cwd_real_path
+
+
+def clean_html_text(value):
+    text = re.sub(r"<script\b[^>]*>.*?</script>", " ", value, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<style\b[^>]*>.*?</style>", " ", text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", " ", text)
+    replacements = {
+        "&nbsp;": " ",
+        "&amp;": "&",
+        "&lt;": "<",
+        "&gt;": ">",
+        "&quot;": '"',
+        "&#39;": "'",
+    }
+    for source, replacement in replacements.items():
+        text = re.sub(re.escape(source), replacement, text, flags=re.IGNORECASE)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def truncate_description(description):
+    return f"{description[:147]}..." if len(description) > 150 else description
+
+
 def load_config(config_path=None):
     """Loads configuration file containing default author details and acronym dictionary."""
     search_paths = []
@@ -237,7 +320,11 @@ def load_config(config_path=None):
                 with open(path, 'r', encoding='utf-8', errors='replace') as f:
                     return json.load(f), path
             except Exception as e:
-                print(f"Warning: Failed to parse config at {path}: {e}", file=sys.stderr)
+                message = f"Failed to parse config at {path}: {e}"
+                if config_path:
+                    print(f"Error: {message}", file=sys.stderr)
+                    sys.exit(1)
+                print(f"Warning: {message}", file=sys.stderr)
                 
     return {}, None
 
@@ -416,6 +503,7 @@ def audit_file(filepath, config, output_format="text"):
         r'\b(?:one|two|three|four|five)\s*-?\s*(?:third|quarter|fifth)s?\b',
         # Proportional phrases
         r'\b\d+\s*(?:out\s*of|in)\s*\d+\b',
+        r'\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:out\s*of|in)\s*(?:two|three|four|five|six|seven|eight|nine|ten)\b',
         # Multiplier words
         r'\b(?:double|triple|quadruple|half|twice)\b',
         # Percentage words
@@ -629,6 +717,80 @@ def audit_file(filepath, config, output_format="text"):
         
     return total_score
 
+def parse_robots_groups(content):
+    groups = []
+    current = None
+
+    for raw_line in content.split("\n"):
+        raw_line = re.sub(r"#.*", "", raw_line).strip()
+        if not raw_line:
+            current = None
+            continue
+
+        agent_match = re.match(r"^User-agent:\s*(.+)$", raw_line, re.IGNORECASE)
+        if agent_match:
+            if current is None or current["rules"]:
+                current = {"agents": [], "rules": []}
+                groups.append(current)
+            current["agents"].append(agent_match.group(1).strip())
+            continue
+
+        rule_match = re.match(r"^(Allow|Disallow):\s*(.*)$", raw_line, re.IGNORECASE)
+        if rule_match and current is not None:
+            current["rules"].append(
+                {
+                    "directive": rule_match.group(1).lower(),
+                    "path": rule_match.group(2).strip(),
+                }
+            )
+
+    return groups
+
+
+def agent_applies(agent_pattern, target_agent):
+    if agent_pattern == "*":
+        return True
+    return agent_pattern.lower() in target_agent.lower()
+
+
+def select_robots_group(groups, target_agent):
+    selected = None
+    selected_length = -1
+
+    for group in groups:
+        for agent in group["agents"]:
+            if agent_applies(agent, target_agent) and len(agent) > selected_length:
+                selected = group
+                selected_length = len(agent)
+
+    return selected
+
+
+def rule_matches_root(path):
+    return path in ["/", "/*"]
+
+
+def blocks_root(group):
+    if not group:
+        return False
+
+    strongest_rule = None
+    for rule in group["rules"]:
+        if not rule["path"] or not rule_matches_root(rule["path"]):
+            continue
+        if (
+            strongest_rule is None
+            or len(rule["path"]) > len(strongest_rule["path"])
+            or (
+                len(rule["path"]) == len(strongest_rule["path"])
+                and rule["directive"] == "allow"
+            )
+        ):
+            strongest_rule = rule
+
+    return strongest_rule is not None and strongest_rule["directive"] == "disallow"
+
+
 def check_robots(robots_path):
     if not os.path.exists(robots_path):
         print(f"Error: robots.txt not found at {robots_path}", file=sys.stderr)
@@ -645,35 +807,22 @@ def check_robots(robots_path):
     print("            ROBOTS.TXT CRAWLER AUDIT             ")
     print("==================================================")
     
+    groups = parse_robots_groups(content)
     blocked_agents = []
-    lines = content.split('\n')
-    current_agents = []
+    for agent in AI_CRAWLER_AGENTS:
+        group = select_robots_group(groups, agent)
+        if blocks_root(group):
+            blocked_agents.append(agent)
 
-    for line in lines:
-        line = line.strip()
-        # Blank line starts a new directive block
-        if not line:
-            current_agents = []
-            continue
-        if line.startswith('#'):
-            continue
-
-        agent_match = re.match(r'^User-agent:\s*(.+)$', line, re.IGNORECASE)
-        if agent_match:
-            current_agents.append(agent_match.group(1).strip())
-            continue
-
-        disallow_match = re.match(r'^Disallow:\s*(.+)$', line, re.IGNORECASE)
-        if disallow_match and current_agents:
-            disallowed_path = disallow_match.group(1).strip()
-            if disallowed_path in ["/", "/*"]:
-                for agent in current_agents:
-                    blocked_agents.append((agent, disallowed_path))
+    wildcard_group = select_robots_group(groups, "*")
+    wildcard_blocks_root = blocks_root(wildcard_group)
                 
-    if blocked_agents:
+    if blocked_agents or wildcard_blocks_root:
         print("WARNING: The following AI agents are blocked from crawling your root directory:")
-        for agent, path in blocked_agents:
-            print(f"  - User-agent: {agent} (Disallow: {path})")
+        if wildcard_blocks_root:
+            print("  - User-agent: * (root access blocked for crawlers without a specific allow)")
+        for agent in blocked_agents:
+            print(f"  - User-agent: {agent} (root access blocked)")
         print("\nNote: Blocking these crawlers prevents AI engines from indexing your content and citing your pages.")
     else:
         print("SUCCESS: No major AI agents or wildcard directives are blocking root access.")
@@ -711,13 +860,22 @@ def generate_schema_data(filepath, schema_type, config, _content=None):
     # Try markdown H1 first, then HTML <h1>
     title_match = re.search(r'^#\s+(.+)$', clean_text, re.MULTILINE)
     if not title_match:
-        title_match = re.search(r'<h1[^>]*>(.+)</h1>', clean_text, re.IGNORECASE)
-    title = title_match.group(1).strip() if title_match else "Untitled Document"
+        title_match = re.search(r'<h1\b[^>]*>(.*?)</h1>', clean_text, re.DOTALL | re.IGNORECASE)
+    title = clean_html_text(title_match.group(1)) if title_match else "Untitled Document"
     
     intro_match = re.search(r'^#\s+.+?\n\n([^#\n]+)', clean_text, re.DOTALL)
-    description = intro_match.group(1).strip() if intro_match else ""
-    if len(description) > 150:
-        description = description[:147] + "..."
+    description = clean_markdown_to_plain_text(intro_match.group(1).strip()) if intro_match else ""
+    if not description and (filepath.endswith(".html") or "<html" in clean_text.lower()):
+        meta_match = re.search(
+            r'<meta\b(?=[^>]*\bname=["\']description["\'])(?=[^>]*\bcontent=(["\'])(.*?)\1)[^>]*>',
+            clean_text,
+            re.DOTALL | re.IGNORECASE,
+        )
+        paragraph_match = re.search(r"<p\b[^>]*>(.*?)</p>", clean_text, re.DOTALL | re.IGNORECASE)
+        description = clean_html_text(meta_match.group(2)) if meta_match else ""
+        if not description and paragraph_match:
+            description = clean_html_text(paragraph_match.group(1))
+    description = truncate_description(description)
         
     author_info = config.get("author", {})
     pub_info = config.get("publisher", {})
@@ -879,15 +1037,7 @@ def inject_schema(filepath, schema_type, config, dry_run=False, no_branding=Fals
         print(f"Error: File {filepath} not found.", file=sys.stderr)
         sys.exit(1)
 
-    # SEC-01: Validate path is within working directory
-    resolved_path = os.path.abspath(filepath)
-    cwd = os.path.abspath(os.getcwd())
-    if not resolved_path.startswith(cwd + os.sep) and resolved_path != cwd:
-        print(
-            f"Error: Security restriction — target file {filepath} is outside the current working directory.",
-            file=sys.stderr,
-        )
-        sys.exit(1)
+    assert_writable_target_inside_cwd(filepath)
 
     # Read file once; pass to generate_schema_data to avoid double I/O.
     try:
@@ -903,7 +1053,7 @@ def inject_schema(filepath, schema_type, config, dry_run=False, no_branding=Fals
     schema_json = json.dumps(schema, indent=2, ensure_ascii=False).replace("</", "<\\/")
         
     schema_pattern = r'```json\s*\{\s*"@context":\s*"https://schema\.org".*?\}\s*```'
-    script_pattern = r'<script[^>]*type="application/ld\+json"[^>]*>.*?https://schema\.org.*?</script>'
+    script_pattern = r'<script\b(?=[^>]*\btype\s*=\s*(["\']?)application/ld\+json\1)[^>]*>.*?</script>'
     
     content = strip_tooltician_branding(content)
     sig_md = "" if no_branding else f"\n\n{TOOLTICIAN_BRANDING_MARKDOWN}\n"
@@ -946,6 +1096,15 @@ def inject_schema(filepath, schema_type, config, dry_run=False, no_branding=Fals
     except Exception as e:
         print(f"Error: Failed to write to file {filepath}: {e}", file=sys.stderr)
         sys.exit(1)
+
+
+def audit_file_json(filepath, config):
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        score = audit_file(filepath, config, "json")
+    report = json.loads(buffer.getvalue())
+    return score, report
+
 
 def main():
     parser = argparse.ArgumentParser(description="GEO (Generative Engine Optimization) Audit and Helper Tool")
@@ -993,9 +1152,18 @@ def main():
 
     if args.command == "audit":
         results = []
+        json_reports = []
         for fp in args.filepaths:
-            score = audit_file(fp, config, args.format)
+            if args.format == "json":
+                score, report = audit_file_json(fp, config)
+                json_reports.append(report)
+            else:
+                score = audit_file(fp, config, args.format)
             results.append((fp, score))
+
+        if args.format == "json":
+            payload = json_reports[0] if len(json_reports) == 1 else json_reports
+            print(json.dumps(payload, indent=2, ensure_ascii=False))
 
         if args.threshold is not None:
             failures = [(fp, s) for fp, s in results if s < args.threshold]
@@ -1004,7 +1172,8 @@ def main():
                 for fp, s in failures:
                     print(f"  {fp}: {s}/100 (threshold: {args.threshold})", file=sys.stderr)
                 sys.exit(1)
-            print(f"\nAll {len(results)} file(s) meet threshold {args.threshold}/100.")
+            if args.format != "json":
+                print(f"\nAll {len(results)} file(s) meet threshold {args.threshold}/100.")
 
     elif args.command == "robots":
         check_robots(args.filepath)
@@ -1024,6 +1193,8 @@ def main():
 
         if backup and not dry_run:
             backup_path = args.filepath + ".bak"
+            assert_writable_target_inside_cwd(args.filepath)
+            assert_new_file_parent_inside_cwd(backup_path)
             try:
                 import shutil
                 shutil.copy2(args.filepath, backup_path)

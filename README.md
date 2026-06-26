@@ -10,7 +10,7 @@ Optimization (GEO)**.
 ## 🌟 Features
 
 *   **Zero-Dependency ESM**: Tiny package size with instant `npx` execution.
-*   **Scientific Metric Audit**: Calculates a GEO score (0-100) based on the Princeton GEO framework (KDD 2024), measuring:
+*   **Heuristic GEO Audit**: Calculates an uncalibrated GEO score (0-100) inspired by the Princeton GEO framework (KDD 2024), measuring:
     *   *Answer-First Formatting* (optimal 40-90 word intro definitions)
     *   *Statistics Density* (excluding calendar years)
     *   *Quotation & Attribution Density*
@@ -97,6 +97,11 @@ Run a heuristic scan on a file. Returns an optimization score out of 100 with ac
 ```bash
 npx geo-opt audit post.md
 ```
+
+The score is a practical project heuristic, not a guaranteed prediction of AI
+search ranking, retrieval, or citation behavior. Treat it as a repeatable
+checklist for content structure, evidence density, citations, and clarity.
+
 Output programmatic JSON format for CI/CD gates:
 ```bash
 npx geo-opt audit post.md --format json
@@ -176,3 +181,13 @@ qualified legal review before paid commercial licenses are issued.
 
 Engineering findings and their current status are maintained in
 [docs/audit-findings.md](docs/audit-findings.md).
+
+## Changelog policy
+
+Every change to executable code, tests, or package behavior must add a concise
+entry under [`CHANGELOG.md`](CHANGELOG.md) → `Unreleased`.
+
+The policy is enforced by `npm run changelog:check`, included in
+`npm run check`, and by GitHub Actions on pull requests and protected-branch
+pushes. Documentation-only and license-only changes do not require a changelog
+entry.

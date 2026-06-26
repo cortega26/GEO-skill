@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
 import fs from "fs";
-import path from "path";
 import {
   auditFile,
+  assertNewFileParentInsideCwd,
+  assertWritableTargetInsideCwd,
   checkRobots,
   generateSchemaData,
   injectSchema,
@@ -13,6 +14,22 @@ import {
   remindersAreEnabled,
   setRemindersEnabled,
 } from "../src/index.js";
+
+function auditFileJson(filepath, config) {
+  const originalLog = console.log;
+  const chunks = [];
+  console.log = (message = "") => {
+    chunks.push(String(message));
+  };
+
+  try {
+    const score = auditFile(filepath, config, "json");
+    const report = JSON.parse(chunks.join("\n"));
+    return { score, report };
+  } finally {
+    console.log = originalLog;
+  }
+}
 
 function printHelp(command = null) {
   if (command === "audit") {
@@ -154,6 +171,11 @@ function main() {
       }
 
       const format = parsed.values.format;
+      if (!["text", "json"].includes(format)) {
+        console.error(`Error: --format must be "text" or "json", got "${format}".`);
+        process.exit(1);
+      }
+
       let threshold = null;
       if (parsed.values.threshold !== undefined) {
         const raw = parsed.values.threshold;
@@ -165,9 +187,22 @@ function main() {
       }
 
       const results = [];
+      const jsonReports = [];
       for (const fp of filepaths) {
-        const score = auditFile(fp, config, format);
-        results.push({ file: fp, score });
+        if (format === "json") {
+          const { score, report } = auditFileJson(fp, config);
+          results.push({ file: fp, score });
+          jsonReports.push(report);
+        } else {
+          const score = auditFile(fp, config, format);
+          results.push({ file: fp, score });
+        }
+      }
+
+      if (format === "json") {
+        console.log(
+          JSON.stringify(jsonReports.length === 1 ? jsonReports[0] : jsonReports, null, 2)
+        );
       }
 
       // Batch threshold check
@@ -180,7 +215,9 @@ function main() {
           }
           process.exit(1);
         }
-        console.log(`\nAll ${results.length} file(s) meet threshold ${threshold}/100.`);
+        if (format !== "json") {
+          console.log(`\nAll ${results.length} file(s) meet threshold ${threshold}/100.`);
+        }
       }
 
       break;
@@ -289,19 +326,15 @@ function main() {
         }
       }
 
-      // Validate path before any file operations (defense in depth —
-      // injectSchema repeats this check internally)
-      const resolvedPath = path.resolve(filepath);
-      const cwd = path.resolve(process.cwd());
-      if (!resolvedPath.startsWith(cwd + path.sep) && resolvedPath !== cwd) {
-        console.error(
-          `Error: Security restriction — target file ${filepath} is outside the current working directory.`
-        );
+      if (!assertWritableTargetInsideCwd(filepath)) {
         process.exit(1);
       }
 
       if (backup && !dryRun) {
         const backupPath = filepath + ".bak";
+        if (!assertNewFileParentInsideCwd(backupPath)) {
+          process.exit(1);
+        }
         try {
           fs.copyFileSync(filepath, backupPath);
           console.log(`Backup created: ${backupPath}`);

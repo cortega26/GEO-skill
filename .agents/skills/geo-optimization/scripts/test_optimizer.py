@@ -4,6 +4,7 @@ import os
 import tempfile
 import sys
 import json
+import subprocess
 from datetime import datetime, timezone
 from io import StringIO
 
@@ -86,6 +87,25 @@ class TestGeoOptimizer(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def test_check_robots_ignores_unrelated_bots_and_honors_allow(self):
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as unrelated:
+            unrelated.write("User-agent: TotallyUnrelatedBot\nDisallow: /\n")
+            unrelated_path = unrelated.name
+        with tempfile.NamedTemporaryFile(mode='w+', suffix='.txt', delete=False) as allowed:
+            allowed.write("User-agent: GPTBot\nDisallow: /\nAllow: /\n")
+            allowed_path = allowed.name
+
+        try:
+            check_robots(unrelated_path)
+            check_robots(allowed_path)
+            output = self.held_stdout.getvalue()
+            self.assertIn("SUCCESS", output)
+            self.assertNotIn("TotallyUnrelatedBot", output)
+            self.assertNotIn("root access blocked", output)
+        finally:
+            os.remove(unrelated_path)
+            os.remove(allowed_path)
+
     def test_generate_schema_data_article(self):
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.md', delete=False) as temp:
             temp.write("# Test Headline\n\nThis is the introductory paragraph that acts as the description.")
@@ -122,6 +142,70 @@ class TestGeoOptimizer(unittest.TestCase):
         finally:
             os.remove(temp_path)
 
+    def test_cli_json_is_parseable_for_batches_and_threshold_failures(self):
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "geo_optimizer.py")
+        fd_one, first_path = tempfile.mkstemp(suffix='.md', dir=os.getcwd())
+        fd_two, second_path = tempfile.mkstemp(suffix='.md', dir=os.getcwd())
+        with os.fdopen(fd_one, 'w') as first:
+            first.write("# One\n\nTiny page with 42 percent evidence.\n")
+        with os.fdopen(fd_two, 'w') as second:
+            second.write("# Two\n\nTiny page with 43 percent evidence.\n")
+
+        try:
+            batch = subprocess.run(
+                [
+                    sys.executable,
+                    script_path,
+                    "audit",
+                    first_path,
+                    second_path,
+                    "--format",
+                    "json",
+                ],
+                cwd=os.getcwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(batch.returncode, 0, batch.stderr)
+            batch_payload = json.loads(batch.stdout)
+            self.assertEqual(len(batch_payload), 2)
+
+            threshold = subprocess.run(
+                [
+                    sys.executable,
+                    script_path,
+                    "audit",
+                    first_path,
+                    "--format",
+                    "json",
+                    "--threshold",
+                    "999",
+                ],
+                cwd=os.getcwd(),
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(threshold.returncode, 1)
+            threshold_payload = json.loads(threshold.stdout)
+            self.assertEqual(threshold_payload["file"], first_path)
+            self.assertIn("Threshold not met", threshold.stderr)
+        finally:
+            os.remove(first_path)
+            os.remove(second_path)
+
+    def test_explicit_malformed_config_exits(self):
+        fd, config_path = tempfile.mkstemp(suffix='.json')
+        with os.fdopen(fd, 'w') as config_file:
+            config_file.write("{ invalid json")
+
+        try:
+            with self.assertRaises(SystemExit):
+                load_config(config_path)
+        finally:
+            os.remove(config_path)
+
     def test_inject_schema_markdown(self):
         # Create temp file inside CWD to pass path traversal guard
         fd, temp_path = tempfile.mkstemp(suffix='.md', dir=os.getcwd())
@@ -135,6 +219,46 @@ class TestGeoOptimizer(unittest.TestCase):
             self.assertIn("```json", updated_content)
             self.assertIn("Carlos Ortega González", updated_content)
             self.assertIn("Tooltician", updated_content)
+        finally:
+            os.remove(temp_path)
+
+    def test_inject_schema_rejects_symlink_target_outside_cwd(self):
+        outside_directory = tempfile.mkdtemp(prefix="geo-opt-outside-")
+        outside_path = os.path.join(outside_directory, "outside.md")
+        link_path = os.path.join(os.getcwd(), "temp_outside_link_py.md")
+        with open(outside_path, "w", encoding="utf-8") as outside_file:
+            outside_file.write("# Outside\n\nOriginal content.\n")
+
+        try:
+            os.symlink(outside_path, link_path)
+            with self.assertRaises(SystemExit):
+                inject_schema(link_path, "article", self.config)
+            with open(outside_path, "r", encoding="utf-8") as outside_file:
+                self.assertEqual(outside_file.read(), "# Outside\n\nOriginal content.\n")
+        finally:
+            if os.path.exists(link_path):
+                os.remove(link_path)
+            os.remove(outside_path)
+            os.rmdir(outside_directory)
+
+    def test_inject_schema_html_description_and_single_quoted_json_ld(self):
+        fd, temp_path = tempfile.mkstemp(suffix='.html', dir=os.getcwd())
+        with os.fdopen(fd, 'w') as temp:
+            temp.write(
+                "<!doctype html><html><body>"
+                "<h1>HTML Title</h1>"
+                "<p>This HTML paragraph should become the structured-data description.</p>"
+                "<script type='application/ld+json'>{\"@context\":\"https://schema.org\",\"@type\":\"Thing\"}</script>"
+                "</body></html>"
+            )
+
+        try:
+            inject_schema(temp_path, "article", self.config)
+            with open(temp_path, "r", encoding="utf-8") as temp:
+                content = temp.read()
+            self.assertEqual(content.count("application/ld+json"), 1)
+            self.assertIn('"headline": "HTML Title"', content)
+            self.assertIn('"description": "This HTML paragraph should become', content)
         finally:
             os.remove(temp_path)
 

@@ -24,6 +24,8 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const repoRoot = path.join(__dirname, "..");
+const cliPath = path.join(repoRoot, "bin", "cli.js");
 
 const config = {
   author: {
@@ -217,6 +219,37 @@ Disallow: /admin
   }
 });
 
+test("checkRobots ignores unrelated bots and honors Allow precedence", () => {
+  const unrelatedFile = path.join(__dirname, "temp_robots_unrelated.txt");
+  const allowedFile = path.join(__dirname, "temp_robots_allowed.txt");
+  fs.writeFileSync(unrelatedFile, "User-agent: TotallyUnrelatedBot\nDisallow: /\n", {
+    encoding: "utf8",
+  });
+  fs.writeFileSync(allowedFile, "User-agent: GPTBot\nDisallow: /\nAllow: /\n", {
+    encoding: "utf8",
+  });
+
+  const originalLog = console.log;
+  const logs = [];
+  console.log = (message = "") => logs.push(String(message));
+
+  try {
+    checkRobots(unrelatedFile);
+    checkRobots(allowedFile);
+    const output = logs.join("\n");
+    assert.match(output, /SUCCESS/);
+    assert.doesNotMatch(output, /TotallyUnrelatedBot/);
+    assert.doesNotMatch(output, /root access blocked/);
+  } finally {
+    console.log = originalLog;
+    for (const file of [unrelatedFile, allowedFile]) {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
+    }
+  }
+});
+
 test("auditFile returns a score and produces valid JSON output", () => {
   const tempFile = path.join(__dirname, "temp_audit.md");
   fs.writeFileSync(
@@ -388,7 +421,6 @@ test("Tooltician Pro entitlement uses the documented local key sources", () => {
 
 test("CLI requires Pro entitlement for --no-branding and removes branding when entitled", () => {
   const tempFile = path.join(__dirname, "temp_no_branding.md");
-  const cliPath = path.join(__dirname, "..", "bin", "cli.js");
   const original = "# Independent Article\n\nIndependent body text.\n";
   fs.writeFileSync(tempFile, original, { encoding: "utf8" });
 
@@ -435,6 +467,92 @@ test("CLI requires Pro entitlement for --no-branding and removes branding when e
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);
     }
+  }
+});
+
+test("CLI audit JSON remains parseable for batches and threshold failures", () => {
+  const firstFile = path.join(__dirname, "temp_cli_json_one.md");
+  const secondFile = path.join(__dirname, "temp_cli_json_two.md");
+  fs.writeFileSync(firstFile, "# One\n\nTiny page with 42 percent evidence.\n", {
+    encoding: "utf8",
+  });
+  fs.writeFileSync(secondFile, "# Two\n\nTiny page with 43 percent evidence.\n", {
+    encoding: "utf8",
+  });
+
+  try {
+    const batch = spawnSync(
+      process.execPath,
+      [cliPath, "audit", firstFile, secondFile, "--format", "json"],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(batch.status, 0, batch.stderr);
+    const batchPayload = JSON.parse(batch.stdout);
+    assert.ok(Array.isArray(batchPayload));
+    assert.strictEqual(batchPayload.length, 2);
+
+    const threshold = spawnSync(
+      process.execPath,
+      [cliPath, "audit", firstFile, "--format", "json", "--threshold", "999"],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(threshold.status, 1);
+    const thresholdPayload = JSON.parse(threshold.stdout);
+    assert.strictEqual(thresholdPayload.file, firstFile);
+    assert.match(threshold.stderr, /Threshold not met/);
+  } finally {
+    for (const file of [firstFile, secondFile]) {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
+    }
+  }
+});
+
+test("CLI rejects explicitly malformed config files", () => {
+  const tempFile = path.join(__dirname, "temp_bad_config_target.md");
+  const configFile = path.join(__dirname, "temp_bad_config.json");
+  fs.writeFileSync(tempFile, "# Target\n\nBody text.\n", { encoding: "utf8" });
+  fs.writeFileSync(configFile, "{ invalid json", { encoding: "utf8" });
+
+  try {
+    const result = spawnSync(
+      process.execPath,
+      [cliPath, "audit", tempFile, "--config", configFile],
+      { cwd: repoRoot, encoding: "utf8" }
+    );
+    assert.strictEqual(result.status, 1);
+    assert.match(result.stderr, /Failed to parse config/);
+    assert.strictEqual(result.stdout, "");
+  } finally {
+    for (const file of [tempFile, configFile]) {
+      if (fs.existsSync(file)) {
+        fs.unlinkSync(file);
+      }
+    }
+  }
+});
+
+test("CLI rejects symlink targets that resolve outside the working directory", () => {
+  const outsideDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "geo-opt-outside-"));
+  const outsideFile = path.join(outsideDirectory, "outside.md");
+  const linkPath = path.join(__dirname, "temp_outside_link.md");
+  fs.writeFileSync(outsideFile, "# Outside\n\nOriginal content.\n", { encoding: "utf8" });
+
+  try {
+    fs.symlinkSync(outsideFile, linkPath);
+    const result = spawnSync(process.execPath, [cliPath, "inject", linkPath, "article"], {
+      cwd: repoRoot,
+      encoding: "utf8",
+    });
+    assert.strictEqual(result.status, 1);
+    assert.match(result.stderr, /resolves outside/);
+    assert.strictEqual(fs.readFileSync(outsideFile, "utf8"), "# Outside\n\nOriginal content.\n");
+  } finally {
+    if (fs.existsSync(linkPath)) {
+      fs.unlinkSync(linkPath);
+    }
+    fs.rmSync(outsideDirectory, { recursive: true, force: true });
   }
 });
 
@@ -592,6 +710,35 @@ test("injectSchema injects JSON-LD script tag into HTML file", () => {
   }
 });
 
+test("injectSchema extracts HTML descriptions and replaces single-quoted JSON-LD", () => {
+  const tempFile = path.join(__dirname, "temp_html_replace.html");
+  fs.writeFileSync(
+    tempFile,
+    `<!DOCTYPE html>
+<html>
+<head><title>Test</title></head>
+<body>
+<h1>HTML Title</h1>
+<p>This HTML paragraph should become the structured-data description.</p>
+<script type='application/ld+json'>{"@context":"https://schema.org","@type":"Thing"}</script>
+</body>
+</html>`,
+    { encoding: "utf8" }
+  );
+
+  try {
+    injectSchema(tempFile, "article", config);
+    const content = fs.readFileSync(tempFile, { encoding: "utf8" });
+    assert.strictEqual((content.match(/application\/ld\+json/g) || []).length, 1);
+    assert.match(content, /"headline": "HTML Title"/);
+    assert.match(content, /"description": "This HTML paragraph should become/);
+  } finally {
+    if (fs.existsSync(tempFile)) {
+      fs.unlinkSync(tempFile);
+    }
+  }
+});
+
 test("auditFile detects verbal statistics as data points", () => {
   const tempFile = path.join(__dirname, "temp_verbal.md");
   fs.writeFileSync(
@@ -606,13 +753,16 @@ Three out of four IT managers recommend the approach.
     { encoding: "utf8" }
   );
 
+  const originalLog = console.log;
+  const logs = [];
   try {
+    console.log = (message = "") => logs.push(String(message));
     const score = auditFile(tempFile, config, "json");
-    // Con "one third", "double", "three out of four" debería tener score > 0
-    // en la categoría de estadísticas
+    const report = JSON.parse(logs.join("\n"));
     assert.ok(typeof score === "number");
-    assert.ok(score > 0);
+    assert.strictEqual(report.breakdown.statistics.score, 20);
   } finally {
+    console.log = originalLog;
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);
     }
@@ -633,14 +783,12 @@ test("injectSchema escapes </script> in JSON-LD to prevent XSS breakout (SEC-03)
     assert.ok(jsonMatch, "JSON-LD code block should exist");
     const jsonLd = jsonMatch[1];
 
-    // The JSON-LD must escape </ to prevent script tag breakout
-    assert.ok(jsonLd.includes("<\\/script"), "JSON-LD should escape </script> as <\\/script");
-    // Raw </script> must NOT appear inside the JSON-LD
     assert.strictEqual(
       jsonLd.includes("</script>"),
       false,
       "JSON-LD must not contain raw </script>"
     );
+    assert.strictEqual(jsonLd.includes("<img"), false, "JSON-LD must not preserve injected tags");
   } finally {
     if (fs.existsSync(tempFile)) {
       fs.unlinkSync(tempFile);

@@ -29,7 +29,13 @@ export function loadConfig(configPath = null) {
         const raw = fs.readFileSync(p, { encoding: "utf8", flag: "r" });
         return { config: JSON.parse(raw), configPath: p };
       } catch (e) {
-        console.warn(`Warning: Failed to parse config at ${p}: ${e.message}`);
+        const message = `Failed to parse config at ${p}: ${e.message}`;
+        if (configPath) {
+          console.error(`Error: ${message}`);
+          process.exit(1);
+          return;
+        }
+        console.warn(`Warning: ${message}`);
       }
     }
   }

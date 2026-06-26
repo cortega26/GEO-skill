@@ -28,6 +28,76 @@ function stripToolticianBranding(content) {
     );
 }
 
+function isInsideDirectory(candidatePath, directoryPath) {
+  const relativePath = path.relative(directoryPath, candidatePath);
+  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
+}
+
+export function assertWritableTargetInsideCwd(filepath) {
+  let targetRealPath;
+  let cwdRealPath;
+  try {
+    targetRealPath = fs.realpathSync(filepath);
+    cwdRealPath = fs.realpathSync(process.cwd());
+  } catch (e) {
+    console.error(`Error: Failed to resolve real path for ${filepath}: ${e.message}`);
+    process.exit(1);
+    return;
+  }
+
+  if (!isInsideDirectory(targetRealPath, cwdRealPath)) {
+    console.error(
+      `Error: Security restriction — target file ${filepath} resolves outside the current working directory.`
+    );
+    process.exit(1);
+    return;
+  }
+
+  return { targetRealPath, cwdRealPath };
+}
+
+export function assertNewFileParentInsideCwd(filepath) {
+  let parentRealPath;
+  let cwdRealPath;
+  try {
+    parentRealPath = fs.realpathSync(path.dirname(filepath));
+    cwdRealPath = fs.realpathSync(process.cwd());
+  } catch (e) {
+    console.error(`Error: Failed to resolve real path for ${filepath}: ${e.message}`);
+    process.exit(1);
+    return;
+  }
+
+  if (!isInsideDirectory(parentRealPath, cwdRealPath)) {
+    console.error(
+      `Error: Security restriction — output path ${filepath} resolves outside the current working directory.`
+    );
+    process.exit(1);
+    return;
+  }
+
+  return { parentRealPath, cwdRealPath };
+}
+
+function cleanHtmlText(value) {
+  return value
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function truncateDescription(description) {
+  return description.length > 150 ? `${description.slice(0, 147)}...` : description;
+}
+
 // _content is an optional pre-read file body. When provided, the file
 // existence check and read are skipped — the caller (injectSchema) has
 // already read the file once to avoid double I/O.
@@ -62,15 +132,23 @@ export function generateSchemaData(filepath, schemaType, config, _content = null
   // Try markdown H1 first, then HTML <h1>
   let titleMatch = cleanText.match(/^#\s+(.+)$/m);
   if (!titleMatch) {
-    titleMatch = cleanText.match(/<h1[^>]*>(.+)<\/h1>/i);
+    titleMatch = cleanText.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
   }
-  const title = titleMatch ? titleMatch[1].trim() : "Untitled Document";
+  const title = titleMatch ? cleanHtmlText(titleMatch[1]) : "Untitled Document";
 
   const introMatch = cleanText.match(/^#\s+.+?\n\n([^#\n]+)/s);
-  let description = introMatch ? introMatch[1].trim() : "";
-  if (description.length > 150) {
-    description = description.slice(0, 147) + "...";
+  let description = introMatch ? cleanMarkdownToPlainText(introMatch[1].trim()) : "";
+  if (!description && (filepath.endsWith(".html") || cleanText.toLowerCase().includes("<html"))) {
+    const metaMatch = cleanText.match(
+      /<meta\b(?=[^>]*\bname=["']description["'])(?=[^>]*\bcontent=(["'])([\s\S]*?)\1)[^>]*>/i
+    );
+    const paragraphMatch = cleanText.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+    description = metaMatch ? cleanHtmlText(metaMatch[2]) : "";
+    if (!description && paragraphMatch) {
+      description = cleanHtmlText(paragraphMatch[1]);
+    }
   }
+  description = truncateDescription(description);
 
   const authorInfo = config.author || {};
   const pubInfo = config.publisher || {};
@@ -238,14 +316,7 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
     return;
   }
 
-  // SEC-01: Validate path is within working directory
-  const resolvedPath = path.resolve(filepath);
-  const cwd = path.resolve(process.cwd());
-  if (!resolvedPath.startsWith(cwd + path.sep) && resolvedPath !== cwd) {
-    console.error(
-      `Error: Security restriction — target file ${filepath} is outside the current working directory.`
-    );
-    process.exit(1);
+  if (!assertWritableTargetInsideCwd(filepath)) {
     return;
   }
 
@@ -266,7 +337,7 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
 
   const schemaPattern = /```json\s*\{\s*"@context":\s*"https:\/\/schema\.org"[\s\S]*?\}\s*```/;
   const scriptPattern =
-    /<script[^>]*type="application\/ld\+json"[^>]*>[\s\S]*?https:\/\/schema\.org[\s\S]*?<\/script>/i;
+    /<script\b(?=[^>]*\btype\s*=\s*(["']?)application\/ld\+json\1)[^>]*>[\s\S]*?<\/script>/i;
 
   content = stripToolticianBranding(content);
   const sigMd = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;

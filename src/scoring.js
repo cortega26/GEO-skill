@@ -139,6 +139,7 @@ export function auditFile(filepath, config, outputFormat = "text") {
     /\b(?:one|two|three|four|five)\s*-?\s*(?:third|quarter|fifth)s?\b/gi,
     // Proportional phrases
     /\b\d+\s*(?:out\s*of|in)\s*\d+\b/gi,
+    /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:out\s*of|in)\s*(?:two|three|four|five|six|seven|eight|nine|ten)\b/gi,
     // Multiplier words
     /\b(?:double|triple|quadruple|half|twice)\b/gi,
     // Percentage words

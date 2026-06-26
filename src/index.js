@@ -22,5 +22,10 @@ export {
   extractSections,
 } from "./text.js";
 export { auditFile } from "./scoring.js";
-export { generateSchemaData, injectSchema } from "./schema.js";
+export {
+  assertNewFileParentInsideCwd,
+  assertWritableTargetInsideCwd,
+  generateSchemaData,
+  injectSchema,
+} from "./schema.js";
 export { checkRobots } from "./robots.js";
