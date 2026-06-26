@@ -1,10 +1,11 @@
 import fs from "fs";
 import path from "path";
+import * as cheerio from "cheerio";
 import { preprocessContent, cleanMarkdownToPlainText, extractSections } from "./text.js";
 import { getNoBrandingError } from "./licensing.js";
 
-const TOOLTICIAN_BRANDING_MARKDOWN = "Optimized with [Tooltician](https://www.tooltician.com)";
-const TOOLTICIAN_BRANDING_HTML =
+export const TOOLTICIAN_BRANDING_MARKDOWN = "Optimized with [Tooltician](https://www.tooltician.com)";
+export const TOOLTICIAN_BRANDING_HTML =
   '<div class="geo-signature"><p>Optimized with <a href="https://www.tooltician.com">Tooltician</a></p></div>';
 const SUPPORTED_SCHEMA_TYPES = new Set(["article", "faq", "product"]);
 
@@ -80,18 +81,8 @@ export function assertNewFileParentInsideCwd(filepath) {
 }
 
 function cleanHtmlText(value) {
-  return value
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\s+/g, " ")
-    .trim();
+  const $ = cheerio.load(value);
+  return $.text().replace(/\s+/g, " ").trim();
 }
 
 function truncateDescription(description) {
@@ -139,13 +130,18 @@ export function generateSchemaData(filepath, schemaType, config, _content = null
   const introMatch = cleanText.match(/^#\s+.+?\n\n([^#\n]+)/s);
   let description = introMatch ? cleanMarkdownToPlainText(introMatch[1].trim()) : "";
   if (!description && (filepath.endsWith(".html") || cleanText.toLowerCase().includes("<html"))) {
-    const metaMatch = cleanText.match(
-      /<meta\b(?=[^>]*\bname=["']description["'])(?=[^>]*\bcontent=(["'])([\s\S]*?)\1)[^>]*>/i
-    );
-    const paragraphMatch = cleanText.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
-    description = metaMatch ? cleanHtmlText(metaMatch[2]) : "";
-    if (!description && paragraphMatch) {
-      description = cleanHtmlText(paragraphMatch[1]);
+    // Use cheerio for reliable <meta name="description"> extraction
+    // regardless of attribute order, and fall back to the first <p>.
+    const $desc = cheerio.load(content);
+    const metaDesc = $desc('meta[name="description"]').attr("content");
+    if (metaDesc) {
+      description = cleanHtmlText(metaDesc);
+    }
+    if (!description) {
+      const firstParagraph = $desc("p").first().text();
+      if (firstParagraph) {
+        description = cleanHtmlText(firstParagraph);
+      }
     }
   }
   description = truncateDescription(description);
