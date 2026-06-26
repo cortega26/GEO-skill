@@ -304,6 +304,57 @@ export function generateSchemaData(filepath, schemaType, config, _content = null
   };
 }
 
+/**
+ * Build the injected content by merging schema JSON-LD and optional branding
+ * into the file body. Pure function — no I/O, no process.exit.
+ *
+ * @param {string} content - raw file content
+ * @param {string} filepath - used to detect HTML vs Markdown
+ * @param {object} schema - generated schema data object
+ * @param {object} options
+ * @param {boolean} [options.noBranding=false]
+ * @returns {{ content: string, replaced: boolean }} modified content and whether an existing tag was replaced
+ */
+export function buildInjectedContent(content, filepath, schema, options = {}) {
+  const noBranding = options.noBranding ?? false;
+  const schemaJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
+
+  const schemaPattern = /```json\s*\{\s*"@context":\s*"https:\/\/schema\.org"[\s\S]*?\}\s*```/;
+  const scriptPattern =
+    /<script\b(?=[^>]*\btype\s*=\s*(["']?)application\/ld\+json\1)[^>]*>[\s\S]*?<\/script>/i;
+
+  content = stripToolticianBranding(content);
+  const sigMd = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
+  const sigHtml = noBranding ? "" : `\n${TOOLTICIAN_BRANDING_HTML}\n`;
+
+  const isHtml = filepath.endsWith(".html") || content.toLowerCase().includes("<html");
+  let replaced = false;
+
+  if (isHtml) {
+    const injectedCode = `${sigHtml}\n<script type="application/ld+json">\n${schemaJson}\n</script>\n`;
+    if (scriptPattern.test(content)) {
+      content = content.replace(scriptPattern, injectedCode.trim());
+      replaced = true;
+    } else if (/<\/head>/i.test(content)) {
+      content = content.replace(/<\/head>/i, `${injectedCode}</head>`);
+    } else if (/<\/body>/i.test(content)) {
+      content = content.replace(/<\/body>/i, `${injectedCode}</body>`);
+    } else {
+      content += injectedCode;
+    }
+  } else {
+    const injectedCode = `${sigMd}\n\`\`\`json\n${schemaJson}\n\`\`\`\n`;
+    if (schemaPattern.test(content)) {
+      content = content.replace(schemaPattern, injectedCode.trim());
+      replaced = true;
+    } else {
+      content += injectedCode;
+    }
+  }
+
+  return { content, replaced };
+}
+
 export function injectSchema(filepath, schemaType, config, options = {}) {
   const normalizedOptions = typeof options === "boolean" ? { dryRun: options } : options;
   const dryRun = normalizedOptions.dryRun ?? false;
@@ -339,54 +390,39 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
   }
 
   const schema = generateSchemaData(filepath, schemaType, config, content);
-  // Escape "</" to prevent breaking out of <script> tags when
-  // JSON-LD is embedded in HTML (SEC-03).
-  const schemaJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
 
-  const schemaPattern = /```json\s*\{\s*"@context":\s*"https:\/\/schema\.org"[\s\S]*?\}\s*```/;
-  const scriptPattern =
-    /<script\b(?=[^>]*\btype\s*=\s*(["']?)application\/ld\+json\1)[^>]*>[\s\S]*?<\/script>/i;
+  const { content: modifiedContent, replaced } = buildInjectedContent(content, filepath, schema, {
+    noBranding,
+  });
 
-  content = stripToolticianBranding(content);
-  const sigMd = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
-  const sigHtml = noBranding ? "" : `\n${TOOLTICIAN_BRANDING_HTML}\n`;
-
-  let injectedCode = `${sigMd}\n\`\`\`json\n${schemaJson}\n\`\`\`\n`;
-
-  if (filepath.endsWith(".html") || content.toLowerCase().includes("<html")) {
-    injectedCode = `${sigHtml}\n<script type="application/ld+json">\n${schemaJson}\n</script>\n`;
-    if (scriptPattern.test(content)) {
-      content = content.replace(scriptPattern, injectedCode.trim());
+  const isHtml = filepath.endsWith(".html") || content.toLowerCase().includes("<html");
+  if (isHtml) {
+    if (replaced) {
       console.log(`Successfully replaced existing JSON-LD script tag in ${filepath}.`);
     } else {
-      if (/<\/head>/i.test(content)) {
-        content = content.replace(/<\/head>/i, `${injectedCode}</head>`);
-      } else if (/<\/body>/i.test(content)) {
-        content = content.replace(/<\/body>/i, `${injectedCode}</body>`);
-      } else {
-        content += injectedCode;
-      }
       console.log(`Successfully injected JSON-LD script tag into ${filepath}.`);
     }
   } else {
-    if (schemaPattern.test(content)) {
-      content = content.replace(schemaPattern, injectedCode.trim());
+    if (replaced) {
       console.log(`Successfully updated existing Schema.org block in markdown file ${filepath}.`);
     } else {
-      content += injectedCode;
       console.log(`Successfully appended Schema.org block to markdown file ${filepath}.`);
     }
   }
 
   if (dryRun) {
+    // Reconstruct preview snippet for dry-run display
+    const previewJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
+    const previewSig = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
+    const preview = `${previewSig}\n\`\`\`json\n${previewJson}\n\`\`\`\n`;
     console.log("=== DRY RUN: The following would be injected ===");
-    console.log(injectedCode);
+    console.log(preview);
     console.log("=== End of dry run preview ===");
     return;
   }
 
   try {
-    fs.writeFileSync(filepath, content, { encoding: "utf8" });
+    fs.writeFileSync(filepath, modifiedContent, { encoding: "utf8" });
   } catch (e) {
     console.error(`Error: Failed to write to file ${filepath}: ${e.message}`);
     process.exit(1);

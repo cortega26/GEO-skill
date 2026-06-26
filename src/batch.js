@@ -1,9 +1,8 @@
 import fs from "fs";
 import { scoreContent } from "./scoring.js";
 import {
+  buildInjectedContent,
   generateSchemaData,
-  TOOLTICIAN_BRANDING_MARKDOWN,
-  TOOLTICIAN_BRANDING_HTML,
   validateWritableTargetInsideCwd,
 } from "./schema.js";
 
@@ -160,53 +159,12 @@ export function batchInject(files, schemaType, config, options = {}) {
         continue;
       }
 
-      // Build the injection payload — replicate injectSchema output logic
-      const schemaJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
+      // Build and inject using the shared pure function
+      const { content: modifiedContent } = buildInjectedContent(content, filepath, schema, {
+        noBranding: options.noBranding,
+      });
 
-      // Strip existing branding before re-injecting
-      content = content
-        .replace(
-          /\n{0,2}Optimized (?:by|with) \[Tooltician\]\(https?:\/\/(?:www\.)?tooltician\.com\/?\)\s*/gi,
-          "\n"
-        )
-        .replace(
-          /\s*<div[^>]*class=["'][^"']*\bgeo-signature\b[^"']*["'][^>]*>[\s\S]*?<\/div>\s*/gi,
-          "\n"
-        );
-
-      const sigMd = options.noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
-      const sigHtml = options.noBranding ? "" : `\n${TOOLTICIAN_BRANDING_HTML}\n`;
-
-      // Determine if HTML or markdown
-      const isHtml = filepath.endsWith(".html") || content.toLowerCase().includes("<html");
-
-      if (isHtml) {
-        const injectedCode = `${sigHtml}\n<script type="application/ld+json">\n${schemaJson}\n</script>\n`;
-        const scriptPattern =
-          /<script\b(?=[^>]*\btype\s*=\s*(["']?)application\/ld\+json\1)[^>]*>[\s\S]*?<\/script>/i;
-
-        if (scriptPattern.test(content)) {
-          content = content.replace(scriptPattern, injectedCode.trim());
-        } else if (/<\/head>/i.test(content)) {
-          content = content.replace(/<\/head>/i, `${injectedCode}</head>`);
-        } else if (/<\/body>/i.test(content)) {
-          content = content.replace(/<\/body>/i, `${injectedCode}</body>`);
-        } else {
-          content += injectedCode;
-        }
-      } else {
-        const injectedCode = `${sigMd}\n\`\`\`json\n${schemaJson}\n\`\`\`\n`;
-        const schemaPattern =
-          /```json\s*\{\s*"@context":\s*"https:\/\/schema\.org"[\s\S]*?\}\s*```/;
-
-        if (schemaPattern.test(content)) {
-          content = content.replace(schemaPattern, injectedCode.trim());
-        } else {
-          content += injectedCode;
-        }
-      }
-
-      fs.writeFileSync(filepath, content, { encoding: "utf8" });
+      fs.writeFileSync(filepath, modifiedContent, { encoding: "utf8" });
       successCount++;
     } catch (err) {
       errors.push({ file: filepath, error: err.message });
