@@ -1,24 +1,89 @@
 import fs from "fs";
+import * as cheerio from "cheerio";
+import { marked } from "marked";
+import chalk from "chalk";
 import { preprocessContent } from "./text.js";
 import { MAX_PRONOUN_DENSITY } from "./config.js";
 
-export function auditFile(filepath, config, outputFormat = "text") {
-  if (!fs.existsSync(filepath)) {
-    console.error(`Error: File ${filepath} not found.`);
-    process.exit(1);
-    return;
-  }
+const VERBAL_STATS_PATTERNS = [
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:-|—)\s*(?:third|quarter|fifth|sixth|seventh|eighth|ninth|tenth)s?\b/gi,
+  /\b(?:one|two|three|four|five)\s*-?\s*(?:third|quarter|fifth)s?\b/gi,
+  /\b\d+\s*(?:out\s*of|in)\s*\d+\b/gi,
+  /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:out\s*of|in)\s*(?:two|three|four|five|six|seven|eight|nine|ten)\b/gi,
+  /\b(?:double|triple|quadruple|half|twice)\b/gi,
+  /\b(?:majority|minority|plurality)\b/gi,
+];
 
-  let content = "";
-  try {
-    content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
-  } catch (e) {
-    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-    process.exit(1);
-    return;
-  }
+// Token walking helpers — traverse the marked AST to count structural elements
+// reliably, without regex-based heuristics.
 
+function countMdLinks(tokens) {
+  let count = 0;
+  function walk(tok) {
+    if (Array.isArray(tok)) {
+      for (const t of tok) walk(t);
+    } else if (tok && typeof tok === "object") {
+      if (tok.type === "link" && tok.href && /^https?:\/\//.test(tok.href)) {
+        count++;
+      } else if (tok.type === "image" && tok.href && /^https?:\/\//.test(tok.href)) {
+        count++;
+      }
+      if (tok.tokens) walk(tok.tokens);
+      if (tok.items) walk(tok.items);
+    }
+  }
+  walk(tokens);
+  return count;
+}
+
+function countBlockquotes(tokens) {
+  let count = 0;
+  function walk(tok) {
+    if (Array.isArray(tok)) {
+      for (const t of tok) walk(t);
+    } else if (tok && typeof tok === "object") {
+      if (tok.type === "blockquote") count++;
+      if (tok.tokens) walk(tok.tokens);
+      if (tok.items) walk(tok.items);
+    }
+  }
+  walk(tokens);
+  return count;
+}
+
+function hasMdTable(tokens) {
+  function walk(tok) {
+    if (Array.isArray(tok)) {
+      return tok.some((t) => walk(t));
+    }
+    if (tok && typeof tok === "object") {
+      if (tok.type === "table") return true;
+      if (tok.tokens && walk(tok.tokens)) return true;
+      if (tok.items && walk(tok.items)) return true;
+    }
+    return false;
+  }
+  return walk(tokens);
+}
+
+function hasMdList(tokens) {
+  function walk(tok) {
+    if (Array.isArray(tok)) {
+      return tok.some((t) => walk(t));
+    }
+    if (tok && typeof tok === "object") {
+      if (tok.type === "list") return true;
+      if (tok.tokens && walk(tok.tokens)) return true;
+      if (tok.items && walk(tok.items)) return true;
+    }
+    return false;
+  }
+  return walk(tokens);
+}
+
+export function scoreContent(content, filepath, config) {
   const textContent = preprocessContent(content);
+  const tokens = marked.lexer(textContent); // AST for reliable structural queries
 
   // 1. Answer-First & Structure (Max 20 pts)
   let structScore = 0;
@@ -67,17 +132,14 @@ export function auditFile(filepath, config, outputFormat = "text") {
     structBreakdown.push("Answer-First: No intro paragraph found (+0 pts)");
   }
 
-  if (
-    (textContent.includes("|") && /\|\s*:?-+:?\s*\|/.test(textContent)) ||
-    textContent.toLowerCase().includes("<table>")
-  ) {
+  if (hasMdTable(tokens) || textContent.toLowerCase().includes("<table>")) {
     structScore += 4;
     structBreakdown.push("Tables: Structured data tables present (+4 pts)");
   } else {
     structBreakdown.push("Tables: No tables found (+0 pts)");
   }
 
-  if (/^\s*[\-\*\+\d\.]+\s+/m.test(textContent)) {
+  if (hasMdList(tokens)) {
     structScore += 3;
     structBreakdown.push("Lists: Bulleted or numbered lists present (+3 pts)");
   } else {
@@ -92,27 +154,26 @@ export function auditFile(filepath, config, outputFormat = "text") {
   }
 
   // HTML semantic tag audits
-  // Use textContent (code blocks stripped) to avoid false positives
-  // when markdown files contain HTML code examples inside code fences.
   if (filepath.endsWith(".html") || textContent.toLowerCase().includes("<html")) {
+    const $html = cheerio.load(content);
     const htmlLower = textContent.toLowerCase();
-    const semanticTags = ["<article", "<main", "<header", "<footer", "<nav", "<section"];
-    const foundTags = semanticTags.filter((t) => htmlLower.includes(t));
+    const semanticTags = ["article", "main", "header", "footer", "nav", "section"];
+    const foundTags = semanticTags.filter((tag) => $html(tag).length > 0);
     if (foundTags.length >= 3) {
       structBreakdown.push(
-        `Semantic HTML: Good HTML5 layout tags used (${foundTags.join(", ")}) (+0 pts)`
+        `Semantic HTML: Good HTML5 layout tags used (<${foundTags.join(">, <")}>) (+0 pts)`
       );
     } else {
       const deduction = 4;
       structScore = Math.max(0, structScore - deduction);
       structBreakdown.push(
-        `Semantic HTML: Lacks HTML5 structural tags (e.g. <main>, <article>). Found only: ${foundTags.join(", ")} (-${deduction} pts)`
+        `Semantic HTML: Lacks HTML5 structural tags (e.g. <main>, <article>). Found only: ${foundTags.length > 0 ? "<" + foundTags.join(">, <") + ">" : "none"} (-${deduction} pts)`
       );
     }
 
-    const dynamicIndicators = ['id="app"', 'id="root"', "createapp(", "reactdom.render("];
-    const foundDynamic = dynamicIndicators.filter((ind) => htmlLower.includes(ind));
-    if (foundDynamic.length > 0) {
+    const hasAppContainer = $html('[id="app"], [id="root"]').length > 0;
+    const hasFrameworkCode = /createapp\(|reactdom\.render\(/i.test(htmlLower);
+    if (hasAppContainer || hasFrameworkCode) {
       structBreakdown.push(
         "Dynamic Rendering Warning: Detects client-side JS references. Ensure content is pre-rendered / SSR for AI crawler searchability."
       );
@@ -121,34 +182,18 @@ export function auditFile(filepath, config, outputFormat = "text") {
 
   // 2. Statistics Density (Max 20 pts)
   let statsScore = 0;
-  // Match percentages (82%), currencies ($24M), metrics (3.2x), decimals (1.5), or large numbers (10,000)
   const statMatches =
     textContent.match(
       /\b\d+(?:\.\d+)?%|\$\d+(?:\.\d+)?[kKmMbB]?|\b\d+(?:\.\d+)?[xX]\b|\b\d{2,}(?:,\d{3})*(?:\.\d+)?\b/g
     ) || [];
 
-  // Filter out calendar years (1900-2099)
   const filteredStats = statMatches.filter((s) => !/^(19|20)\d{2}$/.test(s));
   const statCount = filteredStats.length;
   let statsBreakdown = "";
 
-  // Enhanced: detect verbal/non-numeric statistics
-  const verbalStats = [
-    // Fractions
-    /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:-|—)\s*(?:third|quarter|fifth|sixth|seventh|eighth|ninth|tenth)s?\b/gi,
-    /\b(?:one|two|three|four|five)\s*-?\s*(?:third|quarter|fifth)s?\b/gi,
-    // Proportional phrases
-    /\b\d+\s*(?:out\s*of|in)\s*\d+\b/gi,
-    /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:out\s*of|in)\s*(?:two|three|four|five|six|seven|eight|nine|ten)\b/gi,
-    // Multiplier words
-    /\b(?:double|triple|quadruple|half|twice)\b/gi,
-    // Percentage words
-    /\b(?:majority|minority|plurality)\b/gi,
-  ];
-
   let verbalCount = 0;
   const verbalMatches = [];
-  for (const pattern of verbalStats) {
+  for (const pattern of VERBAL_STATS_PATTERNS) {
     const matches = textContent.match(pattern) || [];
     verbalCount += matches.length;
     if (matches.length > 0) {
@@ -170,9 +215,9 @@ export function auditFile(filepath, config, outputFormat = "text") {
 
   // 3. Quotation Density (Max 20 pts)
   let quotesScore = 0;
-  const quoteBlocks = textContent.match(/^\s*>\s+.+/gm) || [];
+  const blockquoteCount = countBlockquotes(tokens);
   const inlineQuotes = textContent.match(/"([^"]{15,})"/g) || [];
-  const quoteCount = quoteBlocks.length + inlineQuotes.length;
+  const quoteCount = blockquoteCount + inlineQuotes.length;
   let quotesBreakdown = "";
 
   if (quoteCount >= 2) {
@@ -187,9 +232,9 @@ export function auditFile(filepath, config, outputFormat = "text") {
 
   // 4. Citation & Authority (Max 20 pts)
   let citationScore = 0;
-  const mdLinks = textContent.match(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g) || [];
+  const mdLinkCount = countMdLinks(tokens);
   const htmlLinks = textContent.match(/href=["'](https?:\/\/[^"']+)["']/g) || [];
-  const linkCount = mdLinks.length + htmlLinks.length;
+  const linkCount = mdLinkCount + htmlLinks.length;
 
   const hasSourcesHeader = ["sources", "references", "citations", "bibliography"].some((keyword) =>
     textContent.toLowerCase().includes(keyword)
@@ -238,7 +283,6 @@ export function auditFile(filepath, config, outputFormat = "text") {
       );
     }
 
-    // Acronym analysis - strip headers first
     const noHeaders = textContent.replace(/^##+.*$/gm, "");
     const foundAcronyms = new Set(noHeaders.match(/\b[A-Z]{2,}\b/g) || []);
 
@@ -265,7 +309,6 @@ export function auditFile(filepath, config, outputFormat = "text") {
     for (const acr of filteredAcronyms) {
       if (acronymDict[acr]) {
         const expansion = acronymDict[acr];
-        // Match occurrences
         const regex = new RegExp(`\\b${acr}\\b`, "g");
         let isExplained = false;
         let match;
@@ -334,78 +377,122 @@ export function auditFile(filepath, config, outputFormat = "text") {
     );
   }
 
+  const report = {
+    file: filepath,
+    total_score: totalScore,
+    breakdown: {
+      structure: { score: structScore, max: 20, details: structBreakdown },
+      statistics: { score: statsScore, max: 20, details: [statsBreakdown] },
+      quotations: { score: quotesScore, max: 20, details: [quotesBreakdown] },
+      citations: { score: citationScore, max: 20, details: citationBreakdown.split("\n") },
+      clarity: { score: clarityScore, max: 20, details: clarityBreakdown },
+    },
+    recommendations: recs,
+  };
+
+  return { score: totalScore, report };
+}
+
+export function auditFile(filepath, config, outputFormat = "text") {
+  if (!fs.existsSync(filepath)) {
+    console.error(`Error: File ${filepath} not found.`);
+    process.exit(1);
+    return;
+  }
+
+  let content = "";
+  try {
+    content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
+  } catch (e) {
+    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
+    process.exit(1);
+    return;
+  }
+
+  const { score: totalScore, report } = scoreContent(content, filepath, config);
+  const structScore = report.breakdown.structure.score;
+  const structBreakdown = report.breakdown.structure.details;
+  const statsScore = report.breakdown.statistics.score;
+  const statsBreakdown = report.breakdown.statistics.details[0];
+  const quotesScore = report.breakdown.quotations.score;
+  const quotesBreakdown = report.breakdown.quotations.details[0];
+  const citationScore = report.breakdown.citations.score;
+  const citationBreakdown = report.breakdown.citations.details.join("\n");
+  const clarityScore = report.breakdown.clarity.score;
+  const clarityBreakdown = report.breakdown.clarity.details;
+  const recs = report.recommendations;
+
   if (outputFormat === "json") {
-    const reportData = {
-      file: filepath,
-      total_score: totalScore,
-      breakdown: {
-        structure: {
-          score: structScore,
-          max: 20,
-          details: structBreakdown,
-        },
-        statistics: {
-          score: statsScore,
-          max: 20,
-          details: [statsBreakdown],
-        },
-        quotations: {
-          score: quotesScore,
-          max: 20,
-          details: [quotesBreakdown],
-        },
-        citations: {
-          score: citationScore,
-          max: 20,
-          details: citationBreakdown.split("\n"),
-        },
-        clarity: {
-          score: clarityScore,
-          max: 20,
-          details: clarityBreakdown,
-        },
-      },
-      recommendations: recs,
-    };
-    console.log(JSON.stringify(reportData, null, 2));
+    console.log(JSON.stringify(report, null, 2));
   } else {
-    console.log("==================================================");
-    console.log("            GEO OPTIMIZATION AUDIT REPORT         ");
-    console.log("==================================================");
-    console.log(`File: ${filepath}`);
-    console.log(`Total GEO Score: ${totalScore}/100`);
-    console.log("--------------------------------------------------");
-    console.log(`1. Answer-First & Structure: ${structScore}/20`);
+    const scoreColor = (s, max) => {
+      const pct = s / max;
+      if (pct >= 0.8) return chalk.green;
+      if (pct >= 0.5) return chalk.yellow;
+      return chalk.red;
+    };
+    const totalColor = (s) => {
+      if (s >= 80) return chalk.green.bold;
+      if (s >= 50) return chalk.yellow.bold;
+      return chalk.red.bold;
+    };
+
+    const sep = chalk.dim("─".repeat(50));
+    const banner = chalk.bold.blue("═".repeat(50));
+
+    console.log(banner);
+    console.log(chalk.bold.blue("            GEO OPTIMIZATION AUDIT REPORT         "));
+    console.log(banner);
+    console.log(`${chalk.white.bold("File:")} ${filepath}`);
+    console.log(
+      `${chalk.white.bold("Total GEO Score:")} ${totalColor(totalScore)(`${totalScore}/100`)}`
+    );
+    console.log(sep);
+    console.log(
+      `${chalk.bold(`1. Answer-First & Structure: ${scoreColor(structScore, 20)(`${structScore}/20`)}`)}`
+    );
     for (const item of structBreakdown) {
       console.log(`   - ${item}`);
     }
-    console.log("--------------------------------------------------");
-    console.log(`2. Statistics Density: ${statsScore}/20`);
+    console.log(sep);
+    console.log(
+      `${chalk.bold(`2. Statistics Density: ${scoreColor(statsScore, 20)(`${statsScore}/20`)}`)}`
+    );
     console.log(`   - ${statsBreakdown}`);
-    console.log("--------------------------------------------------");
-    console.log(`3. Quotation Density: ${quotesScore}/20`);
+    console.log(sep);
+    console.log(
+      `${chalk.bold(`3. Quotation Density: ${scoreColor(quotesScore, 20)(`${quotesScore}/20`)}`)}`
+    );
     console.log(`   - ${quotesBreakdown}`);
-    console.log("--------------------------------------------------");
-    console.log(`4. Citation & Authority: ${citationScore}/20`);
+    console.log(sep);
+    console.log(
+      `${chalk.bold(`4. Citation & Authority: ${scoreColor(citationScore, 20)(`${citationScore}/20`)}`)}`
+    );
     for (const item of citationBreakdown.split("\n")) {
       console.log(`   - ${item}`);
     }
-    console.log("--------------------------------------------------");
-    console.log(`5. Semantic Clarity: ${clarityScore}/20`);
+    console.log(sep);
+    console.log(
+      `${chalk.bold(`5. Semantic Clarity: ${scoreColor(clarityScore, 20)(`${clarityScore}/20`)}`)}`
+    );
     for (const item of clarityBreakdown) {
       console.log(`   - ${item}`);
     }
-    console.log("==================================================");
+    console.log(banner);
 
-    console.log("\nActionable Recommendations:");
+    console.log(chalk.bold.cyan("\nActionable Recommendations:"));
     if (recs.length === 0) {
-      console.log("Excellent! This page is fully optimized for generative search engine indexing.");
+      console.log(
+        chalk.green.bold(
+          "Excellent! This page is fully optimized for generative search engine indexing."
+        )
+      );
     } else {
       for (const r of recs) {
-        console.log(`- ${r}`);
+        console.log(chalk.cyan(`- ${r}`));
       }
     }
-    console.log("==================================================");
+    console.log(banner);
   }
 
   return totalScore;
