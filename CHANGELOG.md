@@ -9,6 +9,63 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- TypeScript type declarations (`index.d.ts`) covering all 27 public API exports.
+- CI/CD pipeline (`.github/workflows/ci.yml`) running lint, format, JS tests,
+  Python parity tests, changelog policy, and npm audit on PRs and pushes to main.
+
+### Changed
+
+- Deduplicated `TOOLTICIAN_BRANDING_*` constants: defined canonically in
+  `src/schema.js`, imported by `src/batch.js`.
+- Moved `cleanHtmlText` and `truncateDescription` to `src/text.js` as the
+  canonical home; both `src/schema.js` and `src/llms-txt.js` import them.
+- Extracted `buildInjectedContent()` from `injectSchema` and `batchInject`,
+  eliminating ~45 lines of duplicated injection logic.
+- Hoisted verbal-statistics RegExp patterns to module scope in
+  `src/scoring.js` to avoid recompilation per file during batch audits.
+- Moved `import path from "path"` to the top of `src/llms-txt.js`.
+
+### Fixed
+
+- Dot-prefixed entries (`.git`, `node_modules`, etc.) are now correctly
+  skipped during recursive directory walking when no `.gitignore` is present.
+- `batchInject` now validates path confinement via
+  `validateWritableTargetInsideCwd`, closing the symlink security gap that
+  single-file `injectSchema` already enforced.
+- Test coverage for `bin/cli.js` raised from 61% to 80%, covering error
+  paths in `audit`, `inject`, `llmstxt`, `config`, and `init` commands.
+
+### Security
+
+- Added `validateWritableTargetInsideCwd()` as a batch-safe alternative to
+  `assertWritableTargetInsideCwd()` that returns a result object instead of
+  calling `process.exit`, enabling path traversal checks in batch operations.
+  `.gitignore`-aware file discovery, aggregate site-level reports (`--summary`),
+  and multi-file schema injection (`inject --recursive`).
+- `scoreContent()` pure function for scoring without I/O side effects, enabling
+  batch-safe audit loops (`src/scoring.js`).
+- `discoverFiles()` for directory walking with ignore-pattern support via
+  `.gitignore`, `geo_config.json` ignore list, and CLI `--ignore` flags
+  (`src/discovery.js`).
+- `auditFiles()` batch wrapper collecting per-file results without
+  `process.exit` on errors; `aggregateReport()` computing site-level statistics
+  (average, median, std deviation, score distribution, top recommendations,
+  worst pages); `batchInject()` for safe multi-file schema injection
+  (`src/batch.js`).
+- Config schema extended with optional `ignore` and `allowedExtensions` fields.
+- `llms.txt` generation and audit (`geo-opt llmstxt generate`, `geo-opt llmstxt audit`)
+  following the llmstxt.org standard: automatic H1 title + blockquote summary,
+  directory-based H2 sections, `## Optional` for low-score pages, and
+  `llms-full.txt` full-content compilation via `--full`.
+- `robots.txt` generation (`geo-opt robots generate`) producing an optimized
+  file that explicitly allows all 14 major AI crawlers with customizable
+  `--disallow` paths and `--sitemap` URL.
+- `extractPageMetadata()` for H1 title, intro description, and section extraction
+  from Markdown and HTML (`src/llms-txt.js`).
+- `auditLlmsTxt()` for checking llms.txt spec compliance and site coverage
+  (`src/llms-txt.js`).
+
+- Test coverage measurement via `npm run test:coverage` (c8).
 - Added an enforced changelog policy for code changes, with local verification
   and GitHub Actions coverage.
 - Added CLI contract and Python parity coverage for JSON output, robots
