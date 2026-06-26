@@ -91,7 +91,7 @@ class TestGeoOptimizer(unittest.TestCase):
         try:
             check_robots(temp_path)
             output = self.held_stdout.getvalue()
-            self.assertIn("SUCCESS: No major AI agents or wildcard directives are blocking", output)
+            self.assertIn("SUCCESS: No configured AI agents or wildcard directives are blocking", output)
         finally:
             os.remove(temp_path)
 
@@ -504,7 +504,7 @@ class TestGeoOptimizer(unittest.TestCase):
         self.assertTrue(any("H1" in i for i in report["issues"]))
 
     def test_generate_robots_txt_includes_all_ai_crawlers(self):
-        """generate_robots_txt should include all major AI crawlers."""
+        """generate_robots_txt should include every configured AI crawler."""
         result = generate_robots_txt(
             disallow_paths=["/admin"],
             sitemap_url="https://example.com/sitemap.xml",

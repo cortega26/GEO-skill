@@ -15,7 +15,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   runtime integrity verification.
 - Python skill parity for recursive audits, batch injection, aggregate reports,
   `llms.txt`, and AI-crawler-friendly `robots.txt` generation.
-- TypeScript type declarations (`index.d.ts`) covering all 27 public API exports.
+- TypeScript type declarations (`index.d.ts`) covering all 37 public API exports.
 - CI/CD pipeline (`.github/workflows/ci.yml`) running lint, format, JS tests,
   Python parity tests, changelog policy, and npm audit on PRs and pushes to main.
 
@@ -23,8 +23,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - Migrated CLI parsing and terminal output to Commander and Chalk, HTML parsing
   to Cheerio, Markdown parsing to Marked, and config validation to Zod.
-- Archived completed implementation plans and replaced them with the next
-  prioritized roadmap.
+- Refined the public documentation around local-first operation, current
+  capabilities, commercial availability, and evidence-backed limitations.
+- Expanded package metadata for JSON-LD, crawler policy, `llms.txt`, and AI
+  discoverability use cases.
 - Deduplicated `TOOLTICIAN_BRANDING_*` constants: defined canonically in
   `src/schema.js`, imported by `src/batch.js`.
 - Moved `cleanHtmlText` and `truncateDescription` to `src/text.js` as the
@@ -37,6 +39,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Fixed
 
+- Corrected the JSON-LD validator's suggested schema command.
+- Aligned TypeScript declarations with the runtime API by documenting
+  `validateSchemaFile` and removing two internal-only helpers.
+- Reworded audit and crawler output to distinguish search, training, and
+  user-directed agents and to avoid guarantees of indexing or citation.
 - Dot-prefixed entries (`.git`, `node_modules`, etc.) are now correctly
   skipped during recursive directory walking when no `.gitignore` is present.
 - `batchInject` now validates path confinement via
@@ -64,11 +71,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   (`src/batch.js`).
 - Config schema extended with optional `ignore` and `allowedExtensions` fields.
 - `llms.txt` generation and audit (`geo-opt llmstxt generate`, `geo-opt llmstxt audit`)
-  following the llmstxt.org standard: automatic H1 title + blockquote summary,
+  following the llmstxt.org community proposal: automatic H1 title + blockquote summary,
   directory-based H2 sections, `## Optional` for low-score pages, and
   `llms-full.txt` full-content compilation via `--full`.
-- `robots.txt` generation (`geo-opt robots generate`) producing an optimized
-  file that explicitly allows all 14 major AI crawlers with customizable
+- `robots.txt` generation (`geo-opt robots generate`) producing a reviewable
+  draft that explicitly allows all 14 configured AI agents with customizable
   `--disallow` paths and `--sitemap` URL.
 - `extractPageMetadata()` for H1 title, intro description, and section extraction
   from Markdown and HTML (`src/llms-txt.js`).

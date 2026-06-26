@@ -483,9 +483,7 @@ export function auditFile(filepath, config, outputFormat = "text") {
     console.log(chalk.bold.cyan("\nActionable Recommendations:"));
     if (recs.length === 0) {
       console.log(
-        chalk.green.bold(
-          "Excellent! This page is fully optimized for generative search engine indexing."
-        )
+        chalk.green.bold("Excellent! This page meets all checks in the current geo-opt heuristic.")
       );
     } else {
       for (const r of recs) {

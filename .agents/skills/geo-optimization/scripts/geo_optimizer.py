@@ -499,13 +499,13 @@ AI_CRAWLER_AGENTS_LIST = [
 
 
 def generate_robots_txt(disallow_paths=None, sitemap_url=""):
-    """Generate an optimized robots.txt for AI crawler access."""
+    """Generate a reviewable robots.txt draft for configured AI agents."""
     if disallow_paths is None:
         disallow_paths = []
     lines = []
-    lines.append("# ── AI Crawlers ──")
-    lines.append("# Allow major AI crawler user-agents full access so your content")
-    lines.append("# is available for AI-powered search and Retrieval-Augmented Generation (RAG).")
+    lines.append("# ── AI Crawler Policy ──")
+    lines.append("# Draft: allow every agent in geo-opt's current registry.")
+    lines.append("# Review each permission: search, training, and user-directed agents differ.")
     lines.append("")
 
     for agent in AI_CRAWLER_AGENTS_LIST:
@@ -1316,7 +1316,7 @@ def audit_file(filepath, config, output_format="text", _content=None):
         
         print("\nActionable Recommendations:")
         if not recs:
-            print("Excellent! This page is fully optimized for generative search engine indexing.")
+            print("Excellent! This page meets all checks in the current geo-opt heuristic.")
         else:
             for r in recs:
                 print(f"- {r}")
@@ -1430,10 +1430,16 @@ def check_robots(robots_path):
             print("  - User-agent: * (root access blocked for crawlers without a specific allow)")
         for agent in blocked_agents:
             print(f"  - User-agent: {agent} (root access blocked)")
-        print("\nNote: Blocking these crawlers prevents AI engines from indexing your content and citing your pages.")
+        print(
+            "\nThese rules may affect search, training, or user-directed retrieval "
+            "depending on the agent. Review each provider's current documentation."
+        )
     else:
-        print("SUCCESS: No major AI agents or wildcard directives are blocking root access.")
-        print("Your content is crawler-friendly for generative search engine indexing.")
+        print("SUCCESS: No configured AI agents or wildcard directives are blocking root access.")
+        print(
+            "Root access is allowed under the parsed robots.txt rules; "
+            "this does not guarantee indexing or citation."
+        )
     print("==================================================")
 
 def generate_schema_data(filepath, schema_type, config, _content=None):
@@ -1735,7 +1741,10 @@ def main():
     robots_sub = robots_parser.add_subparsers(dest="robots_action", help="Action")
     robots_audit = robots_sub.add_parser("audit", help="Audit robots.txt for AI crawler blocking rules")
     robots_audit.add_argument("filepath", help="Path to robots.txt")
-    robots_gen = robots_sub.add_parser("generate", help="Generate an optimized robots.txt for AI crawler access")
+    robots_gen = robots_sub.add_parser(
+        "generate",
+        help="Generate a reviewable robots.txt draft for configured AI agents",
+    )
     robots_gen.add_argument("--disallow", nargs="*", default=[], help="Paths to disallow for non-AI crawlers")
     robots_gen.add_argument("--sitemap", default="", help="URL of the sitemap")
     robots_gen.add_argument("--output", default="robots.txt", help="Output file path")

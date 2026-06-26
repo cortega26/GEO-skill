@@ -152,17 +152,19 @@ export function checkRobots(robotsPath) {
     }
     console.log(
       chalk.dim(
-        "\nNote: Blocking these crawlers prevents AI engines from indexing your content and citing your pages."
+        "\nThese rules may affect search, training, or user-directed retrieval depending on the agent. Review each provider's current documentation."
       )
     );
   } else {
     console.log(
       chalk.green.bold(
-        "SUCCESS: No major AI agents or wildcard directives are blocking root access."
+        "SUCCESS: No configured AI agents or wildcard directives are blocking root access."
       )
     );
     console.log(
-      chalk.green("Your content is crawler-friendly for generative search engine indexing.")
+      chalk.green(
+        "Root access is allowed under the parsed robots.txt rules; this does not guarantee indexing or citation."
+      )
     );
   }
   console.log(banner);

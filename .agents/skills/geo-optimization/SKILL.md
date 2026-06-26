@@ -1,23 +1,23 @@
 ---
 name: geo-optimization
 description: >
-  Audits and optimizes web content to improve its visibility, retrieval, and
-  citation rate in AI-powered search engines (Google Gemini, ChatGPT, Claude,
-  Perplexity). Applies structural formatting, fact density enhancement, quote
-  additions, reference citations, and entity clarity based on Generative Engine
-  Optimization (GEO) principles.
+  Audits and optimizes web content for technical discoverability in AI-assisted
+  search and retrieval. Applies structural formatting, evidence density,
+  verified quotations, primary-source citations, and entity clarity based on
+  Generative Engine Optimization (GEO) principles without promising ranking or
+  citation outcomes.
 ---
 
 # Generative Engine Optimization (GEO) Skill
 
 > **Implementation note**: This skill is backed by two implementations:
-> - **`npx geo-opt`** (JavaScript/Node.js) — the canonical CLI, published to npm. Use for CI/CD and local development.
+> - **`node bin/cli.js`** (JavaScript/Node.js) — the canonical source CLI. Use it for CI/CD and local development from a repository checkout. The public npm package has not been released.
 > - **`python3 scripts/geo_optimizer.py`** — Python port, used by this skill for agent-driven optimization. Both produce identical results.
->   See [implementation-strategy.md](../../../docs/implementation-strategy.md) for details.
+>   See [architecture.md](../../../docs/architecture.md) for details.
 
 This skill guides the agent in optimizing web content (HTML, Markdown, copy) to be highly searchable, indexable, and referenceable by Retrieval-Augmented Generation (RAG) pipelines in AI search engines.
 
-It leverages findings from the Princeton GEO framework (presented at KDD 2024), which demonstrates that incorporating specific trust, structure, and readability elements can improve brand visibility and citation frequency in LLM responses by up to 40%.
+It draws on the [Princeton GEO research accepted at KDD 2024](https://arxiv.org/abs/2311.09735). The paper reports visibility gains of up to 40% in its experimental benchmark, with results varying by domain. The `geo-opt` score is an independent, uncalibrated heuristic; it does not reproduce that benchmark or predict outcomes in live AI products.
 
 ---
 
@@ -92,17 +92,18 @@ This returns a scorecard covering:
 Apply the following modifications to the source content:
 
 #### 1. Answer-First Formatting (RAG-Friendly)
-AI search engines prioritize concise, clear summaries that match user query intent.
+Concise, self-contained summaries make a page easier to retrieve and interpret.
 *   **Action**: Structure the opening paragraph to be between **40 and 90 words**.
 *   **Style**: Start with a direct definition of the main topic or entity (e.g., *"[Entity] is a [category] that does [primary function]..."*). Avoid conversational filler ("In this post, we are going to look at...").
 
 #### 2. Statistics Addition
-Generative engines value concrete data over qualitative assertions.
+Concrete, verifiable data is more useful than unsupported qualitative claims.
 *   **Action**: Replace words like *"many"*, *"most"*, or *"significantly"* with precise metrics.
 *   **Example**: Change *"Our database saves a lot of storage"* to *"Our deduplication algorithm reduces storage capacity requirements by 34%"*.
 
 #### 3. Quotation Addition
-Attributed quotes enhance trust and provide distinct, citable segments for search engine LLMs.
+Verified, attributed quotes can strengthen provenance and provide distinct
+segments for retrieval.
 *   **Action**: Add 1 to 2 direct expert or stakeholder quotes, citing their full name, job title, and organization. Use markdown blockquotes (`>`).
 
 #### 4. Citation and References
@@ -135,30 +136,34 @@ Check that AI bot crawlers are not blocked from indexing your optimized pages:
     ```bash
     python3 scripts/geo_optimizer.py robots <path-to-robots.txt>
     ```
-3.  Ensure user-agents like `GPTBot`, `Google-Extended`, `ClaudeBot`, and `PerplexityBot` are not blocked from accessing content directories.
+3.  Review whether the site's intended policy allows or blocks each relevant
+    agent. Search, training, and user-directed agents have different purposes;
+    do not treat `GPTBot`, `OAI-SearchBot`, `Google-Extended`, `ClaudeBot`,
+    `Claude-SearchBot`, and `PerplexityBot` as interchangeable.
 
 ---
 
 ### Phase 6: llms.txt Generation & Management
 
-The `llms.txt` standard (llmstxt.org) lets you provide a structured, LLM-friendly
-map of your site — the most impactful single file for Generative Engine
-Optimization.
+The [`llms.txt` community proposal](https://llmstxt.org/) defines a structured,
+LLM-friendly map of a site. It is not a formal web standard or a guaranteed
+ranking mechanism, and it complements rather than replaces accessible HTML,
+sitemaps, `robots.txt`, and structured data.
 
 Generate `llms.txt` and `llms-full.txt` from your content files:
 
 ```bash
 # Generate llms.txt from all pages in a directory
-geo-opt llmstxt generate ./content --recursive --site-url https://example.com
+node bin/cli.js llmstxt generate ./content --recursive --site-url https://example.com
 
 # Include full page content (llms-full.txt)
-geo-opt llmstxt generate ./content --recursive --site-url https://example.com --full
+node bin/cli.js llmstxt generate ./content --recursive --site-url https://example.com --full
 
 # Preview before writing
-geo-opt llmstxt generate ./content --recursive --site-url https://example.com --dry-run
+node bin/cli.js llmstxt generate ./content --recursive --site-url https://example.com --dry-run
 
 # Custom site title and description
-geo-opt llmstxt generate ./content --recursive \
+node bin/cli.js llmstxt generate ./content --recursive \
   --site-url https://example.com \
   --title "My Project" \
   --description "Technical documentation and guides."
@@ -168,25 +173,27 @@ Audit an existing `llms.txt` for spec compliance and coverage:
 
 ```bash
 # Basic structure check
-geo-opt llmstxt audit llms.txt
+node bin/cli.js llmstxt audit llms.txt
 
 # Check that all site pages are covered
-geo-opt llmstxt audit llms.txt --recursive
+node bin/cli.js llmstxt audit llms.txt --recursive
 ```
 
-Generate an optimized `robots.txt` that explicitly allows all major AI crawlers:
+Generate a reviewable `robots.txt` draft that allows the agents in the current
+registry. Confirm that those permissions match the site's search, training,
+privacy, and security policy before publishing:
 
 ```bash
 # Generate with defaults
-geo-opt robots generate
+node bin/cli.js robots generate
 
 # Custom disallow paths and sitemap
-geo-opt robots generate \
+node bin/cli.js robots generate \
   --disallow /admin /api /internal \
   --sitemap https://example.com/sitemap.xml
 
 # Preview
-geo-opt robots generate --dry-run
+node bin/cli.js robots generate --dry-run
 ```
 
 ### Phase 7: Whole-Site Audit & Batch Operations

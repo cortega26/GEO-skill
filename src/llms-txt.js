@@ -340,7 +340,7 @@ export function auditLlmsTxt(llmsContent, discoveredFiles = [], options = {}) {
 // ---- robots.txt generation ----
 
 /**
- * Generate an optimized robots.txt for AI crawler access.
+ * Generate a reviewable robots.txt draft for configured AI agents.
  *
  * @param {object} [options={}]
  * @param {string[]} [options.disallowPaths=[]] - paths to disallow for default crawlers
@@ -351,9 +351,9 @@ export function generateRobotsTxt(options = {}) {
   const { disallowPaths = [], sitemapUrl = "" } = options;
   const lines = [];
 
-  lines.push("# ── AI Crawlers ──");
-  lines.push("# Allow major AI crawler user-agents full access so your content");
-  lines.push("# is available for AI-powered search and Retrieval-Augmented Generation (RAG).");
+  lines.push("# ── AI Crawler Policy ──");
+  lines.push("# Draft: allow every agent in geo-opt's current registry.");
+  lines.push("# Review each permission: search, training, and user-directed agents differ.");
   lines.push("");
 
   for (const agent of AI_CRAWLER_AGENTS) {

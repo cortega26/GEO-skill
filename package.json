@@ -1,7 +1,7 @@
 {
   "name": "geo-opt",
   "version": "2.0.0",
-  "description": "Source-available Generative Engine Optimization audit and structured-data CLI",
+  "description": "Source-available AI discoverability audit, JSON-LD, robots.txt, and llms.txt CLI",
   "main": "src/index.js",
   "types": "index.d.ts",
   "bin": {
@@ -46,7 +46,11 @@
     "chatgpt",
     "perplexity",
     "citations",
-    "schema"
+    "schema",
+    "json-ld",
+    "robots-txt",
+    "llms-txt",
+    "ai-discoverability"
   ],
   "author": "Carlos Ortega González",
   "license": "SEE LICENSE IN LICENSE",

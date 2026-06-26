@@ -1,9 +1,10 @@
 declare module "geo-opt" {
   // ═══ Config ═══
   export const MAX_PRONOUN_DENSITY: number;
-  export function loadConfig(
-    configPath?: string | null
-  ): { config: GeoConfig; configPath: string | null };
+  export function loadConfig(configPath?: string | null): {
+    config: GeoConfig;
+    configPath: string | null;
+  };
 
   export interface GeoConfig {
     author?: {
@@ -64,10 +65,7 @@ declare module "geo-opt" {
     lastReminderAt: string | null;
   }
 
-  export function getStatePath(
-    env?: Record<string, string | undefined>,
-    homedir?: string
-  ): string;
+  export function getStatePath(env?: Record<string, string | undefined>, homedir?: string): string;
   export function readEngagementState(options?: {
     statePath?: string;
     env?: Record<string, string | undefined>;
@@ -213,19 +211,6 @@ declare module "geo-opt" {
     filepath: string
   ): { targetRealPath: string; cwdRealPath: string } | void;
 
-  export function validateWritableTargetInsideCwd(
-    filepath: string
-  ):
-    | { valid: true; targetRealPath: string; cwdRealPath: string }
-    | { valid: false; error: string };
-
-  export function buildInjectedContent(
-    content: string,
-    filepath: string,
-    schema: SchemaGraphObject,
-    options?: { noBranding?: boolean }
-  ): { content: string; replaced: boolean };
-
   export function generateSchemaData(
     filepath: string,
     schemaType: "article" | "faq" | "product",
@@ -248,6 +233,9 @@ declare module "geo-opt" {
   // ═══ Robots ═══
   export const AI_CRAWLER_AGENTS: string[];
   export function checkRobots(robotsPath: string): void;
+
+  // ═══ JSON-LD validation ═══
+  export function validateSchemaFile(filepath: string): void;
 
   // ═══ LLMs.txt ═══
   export interface PageMetadata {

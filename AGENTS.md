@@ -5,10 +5,11 @@ Canonical instructions for AI coding agents working in this repository.
 
 ## Project
 
-`geo-opt` is a zero-dependency CLI tool for Generative Engine Optimization
-(GEO). It audits Markdown/HTML content and scores it from 0–100 using the
-Princeton GEO framework (KDD 2024). It also generates and injects JSON-LD
-Schema.org structured data and audits `robots.txt` for AI crawler access.
+`geo-opt` is a source-available CLI tool for Generative Engine Optimization
+(GEO). It audits Markdown/HTML content with an uncalibrated 0–100 heuristic
+inspired by the Princeton GEO framework (KDD 2024). It also generates,
+injects, and validates JSON-LD Schema.org structured data; audits
+`robots.txt`; and supports `llms.txt`, batch, and CI workflows.
 
 Current releases are source-available under the Tooltician Community License
 1.0, with separate commercial licensing for branding-free use.
@@ -25,7 +26,7 @@ Current releases are source-available under the Tooltician Community License
   - `licensing.js` handles Community/Pro entitlement checks.
   - `engagement.js` handles local, non-blocking support reminders.
   - `index.js` exports the public API.
-- `bin/cli.js` is the CLI entry point and uses `node:util.parseArgs`.
+- `bin/cli.js` is the CLI entry point and uses Commander.
 - `.agents/skills/geo-optimization/` contains the bundled GEO optimization
   agent skill.
 - `.agents/skills/geo-optimization/scripts/geo_optimizer.py` is the Python 3
@@ -40,17 +41,17 @@ reason for divergence.
 
 ## Commands
 
-| Purpose | Command |
-| --- | --- |
-| Test JavaScript | `npm test` |
+| Purpose            | Command                                                             |
+| ------------------ | ------------------------------------------------------------------- |
+| Test JavaScript    | `npm test`                                                          |
 | Test Python parity | `python3 .agents/skills/geo-optimization/scripts/test_optimizer.py` |
-| Lint | `npm run lint` |
-| Format check | `npm run format:check` |
-| Format apply | `npm run format` |
-| Changelog policy | `npm run changelog:check` |
-| Full check | `npm run check` |
-| Run CLI | `node bin/cli.js <command> [args]` |
-| Package preview | `npm pack --dry-run --json` |
+| Lint               | `npm run lint`                                                      |
+| Format check       | `npm run format:check`                                              |
+| Format apply       | `npm run format`                                                    |
+| Changelog policy   | `npm run changelog:check`                                           |
+| Full check         | `npm run check`                                                     |
+| Run CLI            | `node bin/cli.js <command> [args]`                                  |
+| Package preview    | `npm pack --dry-run --json`                                         |
 
 Before handing off code changes, run checks proportional to the risk. For most
 changes, prefer `npm run check`, the Python parity test, and `git diff --check`.
@@ -68,18 +69,18 @@ where a symbol is defined, and a symbol's signature. Use native search only for
 literal text queries, comments, log messages, or after a specific file is
 already open.
 
-| Question | Tool |
-| --- | --- |
-| Where is `X` defined? / Find symbol named `X` | `codegraph_search` |
-| What calls function `Y`? | `codegraph_callers` |
-| What does `Y` call? | `codegraph_callees` |
-| How does `X` reach or become `Y`? | `codegraph_trace` |
-| What would break if I changed `Z`? | `codegraph_impact` |
-| Show me `Y`'s signature/source/docstring | `codegraph_node` |
-| Give me focused context for a task/area | `codegraph_context` |
-| See related symbols' source together | `codegraph_explore` |
-| What files exist under `path/`? | `codegraph_files` |
-| Is the index healthy? | `codegraph_status` |
+| Question                                      | Tool                |
+| --------------------------------------------- | ------------------- |
+| Where is `X` defined? / Find symbol named `X` | `codegraph_search`  |
+| What calls function `Y`?                      | `codegraph_callers` |
+| What does `Y` call?                           | `codegraph_callees` |
+| How does `X` reach or become `Y`?             | `codegraph_trace`   |
+| What would break if I changed `Z`?            | `codegraph_impact`  |
+| Show me `Y`'s signature/source/docstring      | `codegraph_node`    |
+| Give me focused context for a task/area       | `codegraph_context` |
+| See related symbols' source together          | `codegraph_explore` |
+| What files exist under `path/`?               | `codegraph_files`   |
+| Is the index healthy?                         | `codegraph_status`  |
 
 Rules of thumb:
 
@@ -141,4 +142,3 @@ Use concise bullets grouped under Keep a Changelog-style sections such as
   users.
 - Paid/Pro positioning should focus on professional value: branding-free output,
   stronger validation, reporting, workflow integrations, and support.
-

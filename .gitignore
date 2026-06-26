@@ -29,10 +29,19 @@ dist/
 *.log
 npm-debug.log*
 
+# Agent-local state
+.agents/local/
+.agents/tmp/
+.agents/**/*.local.*
+.agents/skills/*
+!.agents/skills/geo-optimization/
+!.agents/skills/geo-optimization/**
+.agents/skills/geo-optimization/**/__pycache__/
+.agents/skills/geo-optimization/**/*.py[cod]
+.agents/skills/geo-optimization/**/*.local.*
+
 # Project specific
-.agents/
 .claude/
 .continue/
 .codegraph/
-plans/
 daemon.pid

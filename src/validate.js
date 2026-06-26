@@ -40,7 +40,7 @@ export function validateSchemaFile(filepath) {
   if (blocks.length === 0) {
     console.log("No JSON-LD blocks found in this file.");
     console.log(
-      'Run "geo-opt generate schema <file> <type>" to create one, or "geo-opt inject <file> <type>" to add it to the file.'
+      'Run "geo-opt schema <file> <type>" to create one, or "geo-opt inject <file> <type>" to add it to the file.'
     );
     return;
   }

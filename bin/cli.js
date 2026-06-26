@@ -191,7 +191,7 @@ robotsCmd
 
 robotsCmd
   .command("generate")
-  .description("Generate an optimized robots.txt for AI crawler access")
+  .description("Generate a reviewable robots.txt draft for configured AI agents")
   .option("--disallow <paths...>", "Paths to disallow for non-AI crawlers")
   .option("--sitemap <url>", "URL of the sitemap")
   .option("--output <path>", "Output file path", "robots.txt")
