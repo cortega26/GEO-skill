@@ -9,6 +9,29 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- Reproducible publish artifact: `npm run build` now stages `src/` and `bin/`
+  into `dist/` without touching tracked source files. The published package
+  ships `dist/` exclusively; `npm pack` and `npm publish` both use `prepack`
+  so they inspect and release the same artifact.
+- Artifact test suite (`tests/artifact.test.js`) covering: build idempotency,
+  source-file purity, deterministic hash embedding, patched CLI imports, CLI
+  help smoke-test, and library entry-point exports from the staged layout.
+
+### Changed
+
+- Replaced the source-mutating `prepublishOnly` + `git checkout` `postpublish`
+  lifecycle pair with a single `prepack` hook that writes only to `dist/`.
+- Removed the `javascript-obfuscator` devDependency: the obfuscator is
+  non-deterministic under its current configuration (dead-code injection and
+  self-defending vary per run), which violates the reproducible-artifact
+  requirement of plan 032. Licensing integrity is preserved through SHA-256
+  hash verification of the unobfuscated `dist/licensing.js`.
+- `package.json#main` updated to `dist/index.js`; `bin.geo-opt` updated to
+  `./dist/bin/cli.js`. Local development and tests continue to use `src/` and
+  `bin/cli.js` directly.
+
+
+
 - Pure local technical-discovery audits for supplied HTML, covering titles,
   visible text, canonical links, meta robots, heading order, language and
   hreflang declarations, link targets, JSON-LD/text consistency, and cautious

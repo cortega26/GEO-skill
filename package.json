@@ -2,14 +2,13 @@
   "name": "geo-opt",
   "version": "2.0.0",
   "description": "Source-available AI discoverability audit, JSON-LD, robots.txt, and llms.txt CLI",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "types": "index.d.ts",
   "bin": {
-    "geo-opt": "./bin/cli.js"
+    "geo-opt": "./dist/bin/cli.js"
   },
   "files": [
-    "bin/",
-    "src/",
+    "dist/",
     "index.d.ts",
     "README.md",
     "CHANGELOG.md",
@@ -30,8 +29,7 @@
     "changelog:check": "node scripts/check-changelog.js",
     "build": "node scripts/build.js",
     "check": "npm run lint && npm run format:check && npm test && npm run test:python && npm run changelog:check",
-    "prepublishOnly": "node scripts/build.js",
-    "postpublish": "git checkout -- src/licensing.js src/integrity.js"
+    "prepack": "node scripts/build.js"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -66,7 +64,6 @@
     "@eslint/js": "^10.0.1",
     "c8": "^11.0.0",
     "eslint": "^10.5.0",
-    "javascript-obfuscator": "^5.4.3",
     "prettier": "^3.8.4"
   },
   "dependencies": {

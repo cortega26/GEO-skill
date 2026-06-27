@@ -1,49 +1,49 @@
 #!/usr/bin/env node
 import { createHash } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
-import JavaScriptObfuscator from "javascript-obfuscator";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
-const LICENSING_SRC = "src/licensing.js";
-const INTEGRITY_SRC = "src/integrity.js";
+const SRC_DIR = "src";
+const BIN_DIR = "bin";
+const DIST_DIR = "dist";
 const PLACEHOLDER = "<<<LICENSING_HASH>>>";
 
-// 1. Leer el código fuente original de licensing
-const originalSource = readFileSync(LICENSING_SRC, "utf8");
+// 1. Limpiar y recrear dist/
+if (existsSync(DIST_DIR)) {
+  rmSync(DIST_DIR, { recursive: true });
+}
+mkdirSync(join(DIST_DIR, "bin"), { recursive: true });
 
-// 2. Ofuscar con configuración agresiva
-const result = JavaScriptObfuscator.obfuscate(originalSource, {
-  compact: true,
-  controlFlowFlattening: true,
-  controlFlowFlatteningThreshold: 0.75,
-  deadCodeInjection: true,
-  deadCodeInjectionThreshold: 0.4,
-  debugProtection: false,
-  disableConsoleOutput: false,
-  identifierNamesGenerator: "hexadecimal",
-  renameGlobals: false,
-  selfDefending: true,
-  stringArray: true,
-  stringArrayEncoding: ["base64"],
-  stringArrayThreshold: 0.75,
-  transformObjectKeys: true,
-  unicodeEscapeSequence: false,
-});
+// 2. Copiar src/ directamente en dist/ (estructura plana idéntica a src/)
+cpSync(SRC_DIR, DIST_DIR, { recursive: true });
 
-const obfuscatedSource = result.getObfuscatedCode();
+// 3. Copiar bin/ a dist/bin/ y parchear rutas de importación relativas.
+//    bin/cli.js usa "../src/" para desarrollo local; en dist/bin/ los módulos
+//    ya están en el nivel padre ("../"), así que ajustamos las rutas.
+cpSync(BIN_DIR, join(DIST_DIR, "bin"), { recursive: true });
+const distCli = join(DIST_DIR, "bin", "cli.js");
+const cliContent = readFileSync(distCli, "utf8");
+writeFileSync(
+  distCli,
+  cliContent.replace(/from "\.\.\/src\//g, 'from "../').replace(/from '\.\.\/src\//g, "from '../")
+);
 
-// 3. Escribir el código ofuscado en licensing.js
-writeFileSync(LICENSING_SRC, obfuscatedSource, "utf8");
+// 4. Calcular SHA256 de dist/licensing.js sin ofuscar.
+//    La ofuscación con javascript-obfuscator es no-determinista (dead-code
+//    injection + self-defending varían por ejecución), lo que viola el
+//    criterio de artefacto reproducible del plan 032.
+const licensingDist = join(DIST_DIR, "licensing.js");
+const licensingContent = readFileSync(licensingDist, "utf8");
+const hash = createHash("sha256").update(licensingContent).digest("hex");
 
-// 4. Calcular SHA256 del código ofuscado
-const hash = createHash("sha256").update(obfuscatedSource).digest("hex");
-
-// 5. Reemplazar el placeholder en integrity.js con el hash real
-let integritySource = readFileSync(INTEGRITY_SRC, "utf8");
+// 5. Reemplazar el placeholder en dist/integrity.js con el hash real
+const integrityDist = join(DIST_DIR, "integrity.js");
+let integritySource = readFileSync(integrityDist, "utf8");
 if (!integritySource.includes(PLACEHOLDER)) {
-  console.error(`Error: ${INTEGRITY_SRC} debe contener el placeholder ${PLACEHOLDER}`);
+  console.error(`Error: ${integrityDist} debe contener el placeholder ${PLACEHOLDER}`);
   process.exit(1);
 }
 integritySource = integritySource.replace(PLACEHOLDER, hash);
-writeFileSync(INTEGRITY_SRC, integritySource, "utf8");
+writeFileSync(integrityDist, integritySource, "utf8");
 
-console.log(`Build completa: licensing.js ofuscado (SHA256: ${hash.substring(0, 16)}...)`);
+console.log(`Build completa: dist/ preparado (SHA256 licensing: ${hash.substring(0, 16)}...)`);
