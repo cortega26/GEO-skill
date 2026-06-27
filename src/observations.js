@@ -394,7 +394,7 @@ function observeParagraphDistribution(textContent, opts = {}) {
  * @param {any[]} tokens
  * @returns {AnswerFirstObservation}
  */
-function observeAnswerFirst(textContent, tokens) {
+function observeAnswerFirst(textContent, _tokens) {
   const lines = textContent
     .split("\n")
     .map((l) => l.trim())
@@ -463,7 +463,7 @@ function observeAnswerFirst(textContent, tokens) {
  * @param {any[]} tokens
  * @returns {AttributionObservation}
  */
-function observeAttributionProximity(textContent, tokens) {
+function observeAttributionProximity(textContent, _tokens) {
   // Find statistics (numbers with % or $) and check if a source reference
   // appears within 150 characters after them.
   const statMatches =

@@ -61,8 +61,8 @@ requires an explicit matrix decision, not automatic duplication in Python.
 Before handing off code changes, run checks proportional to the risk. For most
 changes, prefer `npm run check`, the Python port test, and `git diff --check`.
 
-The manifest still accepts Node.js 20, but that runtime is EOL. Use Node.js 22
-or 24 LTS for development until plan 033 updates the supported range and CI.
+Supported runtimes are Node.js 22 LTS and Node.js 24 LTS. Node.js 20 reached
+EOL on 2026-03-24 and is no longer a supported target.
 
 ## CodeGraph
 

@@ -23,7 +23,7 @@
     "test": "node --test tests/*.test.js",
     "test:coverage": "c8 node --test tests/*.test.js",
     "test:python": "python3 .agents/skills/geo-optimization/scripts/test_optimizer.py",
-    "lint": "eslint src/ bin/ scripts/",
+    "lint": "eslint src/ bin/ scripts/ && python3 -m py_compile .agents/skills/geo-optimization/scripts/geo_optimizer.py .agents/skills/geo-optimization/scripts/test_optimizer.py",
     "format": "prettier --write src/ bin/ scripts/ tests/",
     "format:check": "prettier --check src/ bin/ scripts/ tests/",
     "changelog:check": "node scripts/check-changelog.js",
@@ -32,7 +32,7 @@
     "prepack": "node scripts/build.js"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "geo",

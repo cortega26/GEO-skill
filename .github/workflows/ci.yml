@@ -13,6 +13,9 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24]
 
     steps:
       - name: Check out repository
@@ -20,10 +23,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js
+      - name: Set up Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ matrix.node-version }}
           cache: "npm"
 
       - name: Install Node dependencies
@@ -46,7 +49,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           python3 -m pip install --upgrade pip
-          pip install mistune beautifulsoup4
+          pip install -r .agents/skills/geo-optimization/scripts/requirements.txt
 
       - name: Python compatibility tests
         run: python3 .agents/skills/geo-optimization/scripts/test_optimizer.py

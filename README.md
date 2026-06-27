@@ -33,11 +33,10 @@ with the operator.
 ## Project status
 
 The public npm package has not been released. Use the repository checkout for
-the current implementation. The manifest currently accepts Node.js 20 or newer,
-but Node.js 20 reached
-[end of life](https://nodejs.org/en/about/previous-releases) on 2026-03-24.
-Until roadmap plan 033 updates the manifest and CI, use Node.js 22 or 24 LTS for
-development rather than treating Node 20 as a supported production target.
+the current implementation. Supported runtimes are **Node.js 22 LTS** and
+**Node.js 24 LTS**. Node.js 20 reached
+[end of life](https://nodejs.org/en/about/previous-releases) on 2026-03-24
+and is no longer a supported target.
 
 ```bash
 git clone https://github.com/cortega26/GEO-skill.git

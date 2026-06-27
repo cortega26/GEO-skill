@@ -23,8 +23,8 @@ the current execution roadmap and architecture gate in the local
   is no supported `technical` CLI command yet.
 - The v2 finding/version/type contracts are being stabilized by roadmap gate
   T0. Do not treat experimental JSON as frozen until that gate closes.
-- The manifest currently accepts Node.js 20, but Node.js 20 reached EOL on
-  2026-03-24. Plan 033 owns migration to supported LTS lines.
+- Supported runtimes are Node.js 22 LTS and Node.js 24 LTS. Node.js 20 reached
+  EOL on 2026-03-24 and is no longer a supported target.
 
 ## Runtime responsibilities
 

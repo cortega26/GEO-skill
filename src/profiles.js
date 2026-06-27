@@ -165,7 +165,6 @@ export function scoreCeiling(profile) {
  */
 export function detectProfile(content, filepath = "") {
   const reasons = [];
-  const lower = content.toLowerCase();
   const ext = filepath.split(".").pop()?.toLowerCase() ?? "";
 
   // ── Strong signals for regulated ──

@@ -13,7 +13,6 @@
  *  - Adversarial fixtures must rank below credible counterparts.
  */
 
-import { marked } from "marked";
 import { preprocessContent } from "./text.js";
 import { PROFILES, isApplicable, notApplicableDimensions, resolveProfile } from "./profiles.js";
 import { observeContent } from "./observations.js";
@@ -23,7 +22,6 @@ import {
   mapObservationsToFindings,
   MODEL_VERSION_V2,
 } from "./findings.js";
-import { EVIDENCE_REGISTRY } from "./evidence.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Dimension scoring helpers
@@ -149,8 +147,7 @@ function scoreStructure(obs, profile) {
   }
 
   // Tables, lists, code blocks (0–3 pts) — structural richness
-  const textContent = obs.answerFirst.message; // not useful, need raw. We'll compute inline.
-  // Structural richness is derived from paragraph stats
+  // (derived from paragraph stats below)
   const hasRichStructure =
     obs.paragraphDistribution.stats &&
     obs.paragraphDistribution.stats.median >= 10 &&
@@ -681,7 +678,6 @@ function dedupeFindings(findings) {
  */
 export function scoreContentV2(rawContent, filepath, config = {}) {
   const textContent = preprocessContent(rawContent);
-  const tokens = marked.lexer(textContent);
 
   // 1. Resolve profile — use RAW content for detection so code blocks
   //    and HTML structure are visible to the profile heuristics.

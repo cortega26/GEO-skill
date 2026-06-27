@@ -9,6 +9,31 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- Behavior tests for JSON-LD validation outcomes (`tests/validate.test.js`):
+  file-not-found exits 1, no-block info message, valid schema, missing required
+  fields, HTML script-tag extraction, multi-block count, and unknown-type note.
+- Integrity staging tests (`tests/integrity.test.js`): post-build success
+  (hash matches), mismatch degrades `hasProEntitlement` to the fallback, and
+  missing `licensing.js` activates the tamper guard.
+- Python syntax gate in `npm run lint`: `python3 -m py_compile` now runs
+  against both Python source files as part of the standard lint step.
+
+### Changed
+
+- Minimum supported Node.js raised from 20 to **22**. Node.js 20 reached EOL
+  on 2026-03-24. Supported LTS lines are Node.js 22 and Node.js 24.
+- CI matrix updated to test Node.js 22 and Node.js 24 (previously Node.js 20
+  only).
+- CI now installs Python dependencies from the canonical
+  `.agents/skills/geo-optimization/scripts/requirements.txt` file instead of
+  listing package names directly.
+- `no-unused-vars` ESLint rule changed from `warn` to `error`; previously
+  tolerated six warnings are resolved. Lint now fails on any new unused symbol.
+- Removed unused imports/assignments in `src/scoring-v2.js` (`marked`,
+  `EVIDENCE_REGISTRY`, orphaned `textContent` and `tokens` assignments) and
+  prefixed intentionally-unused function parameters with `_` in
+  `src/observations.js`. Removed unused `lower` local in `src/profiles.js`.
+
 - Dormant, opt-in telemetry scaffold (`src/telemetry.js`): a consent gate and a
   frozen, content-free event schema (`schemaVersion: 1`). The transport is
   disabled (`TELEMETRY_TRANSPORT_ENABLED = false`), so no prompt is shown and no
