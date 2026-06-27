@@ -1,7 +1,7 @@
 # Architecture, contracts and runtime capabilities
 
 **Status:** normative current-state document
-**Last verified:** 2026-06-27 at commit `f91fae7`
+**Last verified:** 2026-06-27 (post plan 034)
 
 The modular JavaScript implementation under `src/` is the canonical runtime for
 the `geo-opt` command-line interface and library. A Python 3 compatibility port
@@ -62,27 +62,48 @@ The Python compatibility implementation lives at
 
 ## Runtime capability matrix
 
-| Capability                                               | Node.js   | Python | Current commitment                             |
-| -------------------------------------------------------- | --------- | ------ | ---------------------------------------------- |
-| V1 single/batch audit and threshold                      | CLI + API | CLI    | Equivalent on committed cross-runtime fixtures |
-| V1 finding/report contract                               | Yes       | Yes    | Equivalent on the reference fixture            |
-| V2 profiles and readiness                                | CLI + API | No     | Node-only, experimental                        |
-| Pure technical HTML audit                                | API       | No     | Node-only, experimental                        |
-| Schema generation and injection                          | CLI + API | CLI    | Compatible; shared safety/metadata invariants  |
-| JSON-LD validation                                       | CLI + API | No     | Node-only                                      |
-| robots audit and generation                              | CLI + API | CLI    | Compatible; registry semantics should align    |
-| `llms.txt` generation and audit                          | CLI + API | CLI    | Compatible                                     |
-| Config, local reminders and entitlement convenience gate | CLI + API | CLI    | Policy-equivalent where implemented            |
-| Typed library API                                        | Yes       | No     | Node-only                                      |
+Every public capability is assigned one of four formal tiers:
 
-This is a descriptive matrix of verified behavior, not a permanent product
-decision. Plan 034 will convert it into explicit `equivalent`, `compatible`,
-`Node-only` or `deprecated` tiers with golden conformance tests.
+| Tier            | Meaning                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `equivalent`    | Observable output contract must match. Tested with shared golden fixtures.              |
+| `compatible`    | Same user outcome; documented shape/CLI differences allowed. Cross-runtime smoke-tested. |
+| `Node-only`     | Intentionally unsupported in Python. No port planned without demonstrated demand.        |
+| `deprecated`    | Python surface scheduled for removal. Migration notice required before deletion.        |
 
-Changes in a shared capability require an explicit matrix decision. New Node
-features do not automatically require a Python port.
+| Capability                                               | Node.js   | Python | Tier          | Rationale                                                                 |
+| -------------------------------------------------------- | --------- | ------ | ------------- | ------------------------------------------------------------------------- |
+| V1 single/batch audit and threshold                      | CLI + API | CLI    | `equivalent`  | Shared finding contract validated on reference fixture; cross-runtime JSON |
+| V1 finding/report contract                               | Yes       | Yes    | `equivalent`  | Same JSON structure tested in `test_optimizer.py:157`                     |
+| V2 profiles and readiness                                | CLI + API | No     | `Node-only`   | Experimental; no Python user demand; requires observation engine          |
+| Pure technical HTML audit                                | API       | No     | `Node-only`   | Node-only by design; requires cheerio DOM traversal                       |
+| Schema generation and injection                          | CLI + API | CLI    | `compatible`  | Same output shape; Python uses BeautifulSoup vs cheerio; shared safety invariants |
+| JSON-LD validation                                       | CLI + API | No     | `Node-only`   | Not implemented in Python; no port requested                              |
+| robots audit and generation                              | CLI + API | CLI    | `compatible`  | Shared registry; Python path resolution differs; purpose-aware semantics align |
+| `llms.txt` generation and audit                          | CLI + API | CLI    | `compatible`  | Same proposal format; Python uses mistune vs marked for parsing           |
+| Config, reminders, licensing convenience gate            | CLI + API | CLI    | `compatible`  | Policy-equivalent where implemented; Python path/env resolution differs   |
+| Typed library API                                        | Yes       | No     | `Node-only`   | Python is a CLI-oriented port, not a separately supported package         |
 
-## Intentional differences
+No capability is currently `deprecated`.
+
+### Tier decision rules
+
+- New Node.js features default to `Node-only` unless Python solves a demonstrated
+  environment constraint.
+- Promoting a capability to `equivalent` requires shared golden fixtures and
+  cross-runtime conformance tests.
+- Moving a `compatible` capability to `equivalent` requires normalizing any
+  documented divergence.
+- Changing a tier is a contract change — update this matrix and the
+  cross-runtime tests in the same pull request.
+
+This matrix is the source of truth. Similar filenames, test names, or function
+names do not establish parity. Blanket claims of "identical results" or
+"full parity" are forbidden in user-facing documentation.
+
+## Intentional and known divergences
+
+### Design differences (by choice)
 
 - JavaScript uses Commander; Python uses `argparse`.
 - JavaScript returns objects where Python may use tuples or dictionaries that
@@ -91,6 +112,31 @@ features do not automatically require a Python port.
   Python resolves paths relative to its script location.
 - The JavaScript package exposes a typed library API. The Python script is a
   CLI-oriented compatibility port rather than a separately supported package.
+- Python uses `mistune` and `BeautifulSoup` for parsing; JavaScript uses
+  `marked` and `cheerio`. Output shapes match; internal parse trees differ.
+
+### Known behavioral divergences (compatible tier)
+
+These are verified differences that do not break the compatible-tier contract
+(same user outcome, documented shape differences allowed):
+
+| Divergence | Node.js | Python | Impact |
+|---|---|---|---|
+| Acronym ordering in clarity details | Iteration-dependent | Iteration-dependent | Detail strings may list unexplained acronyms in different order; both detect the same set |
+| Path resolution in error messages | Absolute path from CWD | Path relative to script location | Error text differs; exit codes match |
+| Dry-run output format | Structured preview | Compressed preview | Both communicate the intended change |
+| Engagement state directory default | `$XDG_STATE_HOME` or `~/.local/state` | `$GEO_OPT_STATE_DIR` or script directory | Different default, same env-var override |
+
+None of these divergences affect audit scores, findings, schema output, robots
+policy, or `llms.txt` content — the committed contracts for `equivalent` and
+`compatible` tiers.
+
+### Forbidden in documentation
+
+- "Identical results" or "full parity" between Node.js and Python.
+- Python commands for capabilities marked `Node-only` (e.g., `--model v2`).
+- CLI flags in examples before the parser accepts them.
+- Python v2 or technical HTML audit examples.
 
 ## Architecture invariants
 
@@ -111,16 +157,18 @@ features do not automatically require a Python port.
 | Contract         | Source of truth                                 | Known hardening                               |
 | ---------------- | ----------------------------------------------- | --------------------------------------------- |
 | CLI              | `bin/cli.js` and CLI tests                      | Shared v1/v2 orchestration in plan 030        |
-| JS exports       | `src/index.js`                                  | Declaration/export gate in plan 031           |
-| Types            | `index.d.ts`                                    | V2 declarations and consumer test in plan 031 |
+| JS exports       | `src/index.js`                                  | Export map + consumer fixture in plan 031     |
+| Types            | `index.d.ts` + `tests/consumer.test.ts`         | All 63 runtime exports declared; typecheck gate active |
 | Findings/reports | `src/findings.js`, scoring modules, tests       | Normalization/version identity in plan 029    |
-| Python support   | This capability matrix plus cross-runtime tests | Formal tier in plan 034                       |
+| Python support   | Capability matrix + `tests/conformance.test.js` | Formal tiers + golden conformance in plan 034 |
 | Release artifact | `package.json`, build/pack tests                | Staged reproducible build in plan 032         |
 
 ## Verification
 
 ```bash
-npm run check
+npm run check            # lint + format + tests + python + conformance + typecheck + changelog
+npm run test:conformance # cross-runtime golden fixture comparison
+npm run typecheck        # consumer fixture type verification
 npm pack --dry-run --json
 git diff --check
 ```
@@ -128,6 +176,45 @@ git diff --check
 For changes to capabilities marked equivalent, add shared conformance coverage.
 For compatible or Node-only behavior, update this matrix and the relevant
 runtime tests instead of silently duplicating or omitting behavior.
+
+## Parity decision gate (change-review checklist)
+
+Every pull request that adds a Node.js capability MUST answer:
+
+- [ ] What is the tier for this capability? (`equivalent`, `compatible`, `Node-only`, `deprecated`)
+- [ ] If `equivalent`: where are the shared golden fixtures and cross-runtime tests?
+- [ ] If `compatible`: what documented divergence justifies not being `equivalent`?
+- [ ] If `Node-only`: is there demonstrated demand for a Python port? If not, defer.
+- [ ] If `deprecated`: where is the migration notice and retirement timeline?
+
+A missing or unverifiable tier status blocks merge. The capability matrix in
+this document is the source of truth — update it in the same pull request.
+
+This gate is enforced by code review, not by an automated check. A future
+automation (e.g., a PR template or lint rule) may formalize it further.
+
+## Python compatibility port: retirement criteria
+
+The Python port is a compatibility convenience for agent-driven workflows that
+cannot yet run Node.js. It is not a permanent product commitment. Python MAY be
+reduced or retired when:
+
+1. **Environment constraint removed**: Node.js is available in the target agent
+   environments where Python is currently the only option.
+2. **Negligible usage**: fewer than 2 distinct workflows rely on Python-specific
+   behavior after Node.js is available.
+3. **Maintenance cost exceeds value**: Python-specific bugs or divergences
+   consume more than 10% of total maintenance time over a rolling 3-month window.
+
+Retirement requires:
+- A documented migration notice in the SKILL.md and CHANGELOG.
+- At least one release cycle (current + next) with a `deprecated` tier marker
+  before deletion.
+- Confirmation that no `equivalent` capability is lost — all `equivalent` and
+  `compatible` capabilities must have a Node.js implementation.
+
+Do NOT retire Python in this plan (034) without evidence and a migration notice.
+The retirement criteria are forward-looking policy, not an immediate action.
 
 ## Scoring model v2 — characterization limitations
 

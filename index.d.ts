@@ -193,7 +193,7 @@ declare module "geo-opt" {
 
   export function detectProfile(content: string, filepath?: string): ProfileDetection;
   export function resolveProfile(
-    config: { profile?: string; [key: string]: unknown } | null | undefined,
+    config: GeoConfig | null | undefined,
     content: string,
     filepath?: string
   ): ResolvedProfile;
@@ -468,6 +468,94 @@ declare module "geo-opt" {
     outputFormat?: "text" | "json"
   ): number;
 
+  /**
+   * Run a GEO audit through the chosen scoring model (unified engine selector).
+   * Returns the same shape as scoreContent (v1) or scoreContentV2 (v2).
+   */
+  export function auditContent(
+    content: string,
+    filepath: string,
+    config?: GeoConfig,
+    model?: "v1" | "v2"
+  ): { score: number; report: AuditReport | V2Report };
+
+  // ═══ V2 scoring ═══
+  export interface V2DimensionScore {
+    score: number;
+    max: number;
+    applicable: boolean;
+    details: string[];
+  }
+
+  export interface V2ProfileInfo {
+    detected: ProfileId;
+    label: string;
+    confidence: number;
+    overridden: boolean;
+    reasons: string[];
+  }
+
+  export interface V2StructuralObservations {
+    headingHierarchy: ObservationStatus;
+    sectionSelfContainment: ObservationStatus;
+    answerFirst: ObservationStatus;
+  }
+
+  export interface V2AttributionSummary {
+    statsWithAttribution: number;
+    statsWithoutAttribution: number;
+    quotesWithAttribution: number;
+    quotesWithoutAttribution: number;
+  }
+
+  export interface V2LinkSummary {
+    externalLinks: number;
+    hasSourcesSection: boolean;
+    hasExcessiveLinks: boolean;
+  }
+
+  export interface V2ContentFreshness {
+    publishedDate: string | null;
+    reviewedDate: string | null;
+  }
+
+  export interface V2Report extends ReportMeta {
+    file: string;
+    profile: V2ProfileInfo;
+    readinessBand: string;
+    readinessLabel: string;
+    readinessDescription: string;
+    applicableDimensions: number;
+    effectiveScore: number;
+    dimensions: Record<string, V2DimensionScore>;
+    structuralObservations: V2StructuralObservations;
+    attributionSummary: V2AttributionSummary;
+    linkSummary: V2LinkSummary;
+    contentFreshness: V2ContentFreshness;
+    findings: Finding[];
+    notApplicableDimensions: string[];
+    recommendations: string[];
+  }
+
+  export function scoreContentV2(
+    rawContent: string,
+    filepath: string,
+    config?: GeoConfig
+  ): { score: number; report: V2Report };
+
+  // ═══ Rendering ═══
+  export function renderV1Report(
+    report: AuditReport,
+    filepath: string,
+    options?: { explain?: boolean }
+  ): string;
+
+  export function renderV2Report(report: V2Report, filepath: string): string;
+
+  export function renderV1Summary(summary: AggregateReport): string;
+
+  export function renderV2Summary(summary: AggregateReport): string;
+
   // ═══ Discovery ═══
   export interface DiscoverOptions {
     recursive?: boolean;
@@ -539,11 +627,27 @@ declare module "geo-opt" {
 
   export function assertNewFileParentInsideCwd(
     filepath: string
-  ): { parentRealPath: string; cwdRealPath: string } | void;
+  ): { parentRealPath: string; cwdRealPath: string };
 
   export function assertWritableTargetInsideCwd(
     filepath: string
-  ): { targetRealPath: string; cwdRealPath: string } | void;
+  ): { targetRealPath: string; cwdRealPath: string };
+
+  /**
+   * Validate that a new file's parent directory is inside the CWD.
+   * Batch-safe: returns a result object instead of throwing.
+   */
+  export function validateNewFileParentInsideCwd(
+    filepath: string
+  ): { valid: true; parentRealPath: string; cwdRealPath: string } | { valid: false; error: string };
+
+  /**
+   * Validate that a target path resolves inside the CWD.
+   * Batch-safe: returns a result object instead of throwing.
+   */
+  export function validateWritableTargetInsideCwd(
+    filepath: string
+  ): { valid: true; targetRealPath: string; cwdRealPath: string } | { valid: false; error: string };
 
   export function generateSchemaData(
     filepath: string,

@@ -300,18 +300,40 @@ distinction and current limitations.
 ## JavaScript library
 
 The package entry point exports the building blocks used by the CLI, including
-scoring, discovery, batch aggregation, schema generation, crawler inspection,
-validation, `llms.txt` helpers, technical HTML observations and local preference
-management. Type declarations are provided in [`index.d.ts`](index.d.ts), but
-the experimental v2 export is not yet part of the verified typed contract; that
-gap is a release blocker in roadmap plan 031.
+scoring (v1 and v2), discovery, batch aggregation, schema generation, crawler
+inspection, validation, `llms.txt` helpers, technical HTML observations and
+local preference management. Every supported runtime export has an accurate
+type declaration in [`index.d.ts`](index.d.ts), verified by a consumer fixture
+that compiles against the public API surface.
 
 ```javascript
-import { loadConfig, scoreContent } from "geo-opt";
+import { loadConfig, scoreContent, scoreContentV2 } from "geo-opt";
 
 const { config } = loadConfig();
 const { score, report } = scoreContent(markdown, "article.md", config);
 ```
+
+### Supported import paths
+
+The package `exports` map defines the public API surface:
+
+| Import path        | Purpose                                              |
+| ------------------ | ---------------------------------------------------- |
+| `"geo-opt"`        | Public API entry point (all documented exports)      |
+| `"geo-opt/package.json"` | Package metadata for tooling                  |
+
+Importing internal modules directly (e.g., `"geo-opt/src/scoring-v2.js"`) is
+not supported and is blocked by the exports map. Internal file paths may change
+without notice. Use only the root `"geo-opt"` import for library code.
+
+### TypeScript
+
+Type declarations are maintained in [`index.d.ts`](index.d.ts) and checked by
+a dedicated consumer compilation test. Run `npm run typecheck` to verify the
+declarations against a realistic consumer fixture.
+
+**Maintenance rule:** any future root export must update the declaration and
+consumer fixture in the same change.
 
 ## Development and verification
 
@@ -320,6 +342,7 @@ const { score, report } = scoreContent(markdown, "article.md", config);
 | Full project check | `npm run check`             |
 | JavaScript tests   | `npm test`                  |
 | Python port tests  | `npm run test:python`       |
+| Type check         | `npm run typecheck`         |
 | Lint               | `npm run lint`              |
 | Format check       | `npm run format:check`      |
 | Package preview    | `npm pack --dry-run --json` |

@@ -4,6 +4,13 @@
   "description": "Source-available AI discoverability audit, JSON-LD, robots.txt, and llms.txt CLI",
   "main": "dist/index.js",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "bin": {
     "geo-opt": "./dist/bin/cli.js"
   },
@@ -23,12 +30,14 @@
     "test": "node --test tests/*.test.js",
     "test:coverage": "c8 node --test tests/*.test.js",
     "test:python": "python3 .agents/skills/geo-optimization/scripts/test_optimizer.py",
+    "test:conformance": "node --test tests/conformance.test.js",
     "lint": "eslint src/ bin/ scripts/ && python3 -m py_compile .agents/skills/geo-optimization/scripts/geo_optimizer.py .agents/skills/geo-optimization/scripts/test_optimizer.py",
     "format": "prettier --write src/ bin/ scripts/ tests/",
     "format:check": "prettier --check src/ bin/ scripts/ tests/",
     "changelog:check": "node scripts/check-changelog.js",
     "build": "node scripts/build.js",
-    "check": "npm run lint && npm run format:check && npm test && npm run test:python && npm run changelog:check",
+    "typecheck": "tsc -p tsconfig.json",
+    "check": "npm run lint && npm run format:check && npm test && npm run test:python && npm run test:conformance && npm run typecheck && npm run changelog:check",
     "prepack": "node scripts/build.js"
   },
   "engines": {
@@ -64,7 +73,8 @@
     "@eslint/js": "^10.0.1",
     "c8": "^11.0.0",
     "eslint": "^10.5.0",
-    "prettier": "^3.8.4"
+    "prettier": "^3.8.4",
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "chalk": "^5.6.2",
