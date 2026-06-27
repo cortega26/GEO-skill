@@ -195,6 +195,13 @@ export function renderV2Report(report, filepath) {
   lines.push(
     `${chalk.white.bold("Effective score:")} ${chalk.bold(`${report.effectiveScore}`)} (${report.applicableDimensions} applicable dimensions)`
   );
+
+  // Plain-English summary for non-technical users
+  lines.push("");
+  lines.push(chalk.bold("📋 In plain English:"));
+  lines.push(...plainEnglishSummary(report));
+  lines.push("");
+
   lines.push(SEP);
 
   const dimLabels = {
@@ -349,4 +356,61 @@ export function renderV2Summary(summary) {
   }
   lines.push(banner);
   return lines.join("\n");
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Generate a plain-English summary of a v2 report for non-technical users.
+ * @param {object} report - V2Report
+ * @returns {string[]} lines for display
+ */
+function plainEnglishSummary(report) {
+  const lines = [];
+  const score = report.effectiveScore;
+  const profile = report.profile?.label || "content";
+  const band = report.readinessBand;
+
+  if (score >= 80) {
+    lines.push(`  Your ${profile} page is well-optimized for AI discovery.`);
+  } else if (score >= 50) {
+    lines.push(`  Your ${profile} page has decent AI discoverability but could improve.`);
+  } else {
+    lines.push(`  Your ${profile} page needs work to be reliably discovered by AI engines.`);
+  }
+
+  const dims = report.dimensions || {};
+  const issues = [];
+  if (dims.structure?.applicable && dims.structure.score < 12) {
+    issues.push("add clear headings and an introductory paragraph that defines the topic");
+  }
+  if (dims.statistics?.applicable && dims.statistics.score < 10) {
+    issues.push("include specific numbers, percentages, or metrics with named sources");
+  }
+  if (dims.quotations?.applicable && dims.quotations.score < 10) {
+    issues.push("add attributed quotes from named experts or customers");
+  }
+  if (dims.citations?.applicable && dims.citations.score < 10) {
+    issues.push("link your claims to reputable external sources");
+  }
+  if (dims.clarity?.applicable && dims.clarity.score < 15) {
+    issues.push("replace vague pronouns like 'it' and 'they' with specific names");
+  }
+  if (issues.length > 0) {
+    lines.push(`  To improve: ${issues.join("; ")}.`);
+  }
+
+  const bandAdvice = {
+    "production-ready": "This page is ready for production publication.",
+    solid: "Close to ready — a few tweaks will make a difference.",
+    "at-risk": "Address the flagged issues before publishing widely.",
+    "needs-work": "This page needs substantial improvement to be AI-discoverable.",
+  };
+  if (bandAdvice[band]) {
+    lines.push(`  ${bandAdvice[band]}`);
+  }
+
+  return lines;
 }

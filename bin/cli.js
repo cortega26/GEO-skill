@@ -137,7 +137,14 @@ program
     }
 
     // ── Unified audit: one path for v1 and v2 ──
-    const results = auditFiles(discovered, config, model);
+    const showProgress = format !== "json" && discovered.length > 1;
+    const results = auditFiles(discovered, config, model,
+      showProgress ? (i, total, fp) => {
+        const pct = Math.round(((i + 1) / total) * 100);
+        process.stderr.write(`\r  Auditing... ${i + 1}/${total} (${pct}%)`);
+        if (i + 1 === total) process.stderr.write("\n");
+      } : undefined
+    );
 
     if (format === "json") {
       if (options.summary) {
@@ -456,6 +463,7 @@ llmstxtCmd
             url = siteUrl.replace(/\/+$/, "") + "/" + withoutExt;
           }
         } else {
+          const relDir = path.relative(process.cwd(), path.dirname(fp));
           url = relDir + "/" + path.basename(fp);
         }
 
@@ -803,6 +811,177 @@ program
     } catch (e) {
       console.error(`Error: Failed to write ${targetPath}: ${e.message}`);
       process.exit(1);
+    }
+  });
+
+// --- Generate-All: complete GEO optimization package ---
+program
+  .command("generate-all [dir]")
+  .description("Generate a complete GEO optimization package from a content directory")
+  .option("-r, --recursive", "Recursively scan subdirectories")
+  .option("--ignore <patterns...>", "Additional ignore patterns")
+  .option("--output <dir>", "Output directory", "geo-package")
+  .option("--site-url <url>", "Base URL of the site (e.g. https://example.com)")
+  .option("--title <name>", "Site name")
+  .option("--description <text>", "Site description")
+  .option("--model <version>", "Audit scoring model (v1 or v2)", "v2")
+  .option("--dry-run", "Preview files without writing to disk")
+  .action((dir, options, cmd) => {
+    const config = resolveConfig(cmd);
+    const inputDirs = dir ? [dir] : ["."];
+    const outDir = path.resolve(options.output);
+    const siteUrl = options.siteUrl || config.siteUrl || "";
+    const siteTitle = options.title || config.publisher?.name || path.basename(process.cwd());
+    const siteDescription = options.description || config.siteDescription || "";
+    const model = options.model === "v2" ? "v2" : "v1";
+
+    // 1. Discover files
+    const allowedExts = new Set(
+      Array.isArray(config.allowedExtensions) && config.allowedExtensions.length > 0
+        ? config.allowedExtensions
+        : [".md", ".html", ".htm"]
+    );
+
+    let files;
+    try {
+      files = discoverFiles(inputDirs, {
+        recursive: options.recursive || true,
+        ignorePatterns: options.ignore || [],
+        allowedExtensions: allowedExts,
+        cwd: process.cwd(),
+        config,
+      });
+    } catch (e) {
+      console.error(`Error discovering files: ${e.message}`);
+      process.exit(1);
+    }
+
+    if (files.length === 0) {
+      console.error("No content files found in the specified directory.");
+      console.error("Supported formats: " + [...allowedExts].join(", "));
+      process.exit(1);
+    }
+
+    const total = files.length;
+    if (!options.dryRun) {
+      console.log(`\n🔍 Generating GEO package for ${total} file(s)...\n`);
+    }
+
+    // 2. Run audit on all files
+    let auditResults = [];
+    try {
+      auditResults = auditFiles(files, config, model);
+    } catch (e) {
+      console.error(`Audit error: ${e.message}`);
+    }
+
+    const scoreEntries = [];
+    const fullEntries = [];
+    for (const r of auditResults) {
+      if (r.status === "success" && r.report) {
+        const score = r.score ?? (r.report.total_score ?? r.report.effectiveScore);
+        scoreEntries.push({ file: r.file, score });
+      }
+      // Read content for full-text generation
+      try {
+        const content = fs.readFileSync(r.file, { encoding: "utf8" });
+        const { title } = extractPageMetadata(content, r.file);
+        const rel = path.relative(process.cwd(), r.file).split(path.sep).join("/");
+        const ext = path.extname(rel);
+        let urlPath = rel.slice(0, -ext.length);
+        if (path.basename(urlPath) === "index") urlPath = path.dirname(urlPath);
+        if (urlPath === ".") urlPath = "/";
+        else if (!urlPath.startsWith("/")) urlPath = "/" + urlPath;
+        const url = siteUrl ? siteUrl.replace(/\/+$/, "") + urlPath : urlPath;
+        const section = suggestSection(r.file, content);
+        const score = r.score ?? (r.report?.total_score ?? r.report?.effectiveScore ?? undefined);
+        fullEntries.push({ title, url, section, content, score });
+      } catch {
+        // Skip files that can't be read
+      }
+    }
+
+    // 3. Generate aggregate audit report
+    const aggregate = aggregateReport(auditResults);
+    const reportJson = JSON.stringify(aggregate, null, 2);
+
+    // 4. Generate llms.txt
+    const llmsTxtEntries = fullEntries.map((e) => ({
+      title: e.title,
+      url: e.url,
+      description: "", // CLI extracts this; for generate-all we keep it concise
+      section: e.section,
+      score: e.score,
+    }));
+    const llmsContent = generateLlmsTxt(llmsTxtEntries, {
+      siteTitle,
+      siteDescription,
+    });
+
+    // 5. Generate llms-full.txt
+    const llmsFullFiles = generateLlmsFullTxtFiles(
+      fullEntries.map((e) => ({ title: e.title, url: e.url, content: e.content })),
+      { siteTitle }
+    );
+
+    // 6. Generate sitemap.xml
+    const sitemapEntries = fullEntries.map((e) => ({
+      url: e.url,
+      score: e.score,
+      filePath: path.resolve(e.file || path.join(process.cwd(), e.url)),
+    }));
+    const sitemapContent = generateSitemapXml(sitemapEntries, { baseUrl: siteUrl });
+
+    // 7. Generate robots.txt
+    const robotsContent = generateRobotsTxt({
+      preset: "search-visible",
+      sitemapUrl: siteUrl ? `${siteUrl.replace(/\/+$/, "")}/sitemap.xml` : "",
+    });
+
+    // 8. Write or preview
+    if (options.dryRun) {
+      console.log("=== DRY RUN — No files will be written ===\n");
+      console.log(`Would create package in: ${outDir}/`);
+      console.log(`  • audit-report.json (${files.length} files, avg score: ${aggregate.averageScore ?? "N/A"})`);
+      console.log(`  • llms.txt (${fullEntries.length} pages, ${new Set(fullEntries.map(e => e.section)).size} sections)`);
+      console.log(`  • llms-full.txt (${llmsFullFiles.length} file(s))`);
+      console.log(`  • sitemap.xml (${sitemapEntries.length} URLs)`);
+      console.log(`  • robots.txt`);
+      console.log("");
+      console.log("Preview — llms.txt:");
+      console.log(llmsContent.substring(0, 500));
+      console.log("...");
+    } else {
+      fs.mkdirSync(outDir, { recursive: true });
+      fs.writeFileSync(path.join(outDir, "audit-report.json"), reportJson, { encoding: "utf8" });
+      fs.writeFileSync(path.join(outDir, "llms.txt"), llmsContent, { encoding: "utf8" });
+      for (const file of llmsFullFiles) {
+        fs.writeFileSync(path.join(outDir, file.name), file.content, { encoding: "utf8" });
+      }
+      fs.writeFileSync(path.join(outDir, "sitemap.xml"), sitemapContent, { encoding: "utf8" });
+      fs.writeFileSync(path.join(outDir, "robots.txt"), robotsContent, { encoding: "utf8" });
+
+      console.log("");
+      console.log("✅ GEO optimization package generated:");
+      console.log(`   📊 audit-report.json  (${files.length} files, avg: ${aggregate.averageScore ?? "N/A"})`);
+      console.log(`   📋 llms.txt           (${fullEntries.length} pages)`);
+      for (const file of llmsFullFiles) {
+        console.log(`   📄 ${file.name.padEnd(20)} (full content)`);
+      }
+      console.log(`   🗺️  sitemap.xml        (${sitemapEntries.length} URLs)`);
+      console.log(`   🤖 robots.txt`);
+      console.log(`\n   Output: ${outDir}/`);
+    }
+
+    if (!options.dryRun) {
+      // Show top-level summary
+      const topIssues = (aggregate.topFindings || []).slice(0, 3);
+      if (topIssues.length > 0) {
+        console.log(`\n📝 Top issues to fix:`);
+        for (const issue of topIssues) {
+          console.log(`   • ${issue.message} (${issue.fileCount} files)`);
+        }
+      }
     }
   });
 

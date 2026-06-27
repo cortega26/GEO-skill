@@ -13,11 +13,15 @@ import {
  * @param {string[]} files - absolute file paths
  * @param {object} config - parsed config object
  * @param {"v1"|"v2"} [model="v1"] - scoring model
+ * @param {function} [onProgress] - called after each file: onProgress(index, total, filepath)
  * @returns {Array<{ file: string, status: string, score?: number, report?: object, error?: string }>}
  */
-export function auditFiles(files, config, model = "v1") {
+export function auditFiles(files, config, model = "v1", onProgress) {
+  const total = files.length;
   const results = [];
-  for (const filepath of files) {
+  for (let i = 0; i < files.length; i++) {
+    const filepath = files[i];
+    if (onProgress) onProgress(i, total, filepath);
     try {
       let content;
       try {
