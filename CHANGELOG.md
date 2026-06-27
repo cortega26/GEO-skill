@@ -86,6 +86,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Fixed
 
+- Completed Python parity for versioned, evidence-labeled audit findings and
+  report metadata, with a cross-runtime fixture test and aligned Markdown
+  blockquote counting.
 - Ensured the main CI workflow fetches pull-request base history before running
   the changelog policy check.
 - Generated crawler-specific groups now preserve sensitive `Disallow` paths,

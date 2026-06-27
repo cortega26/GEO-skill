@@ -26,6 +26,25 @@ REMINDER_COOLDOWN_SECONDS = 7 * 24 * 60 * 60
 STATE_DIR_ENV_VAR = "GEO_OPT_STATE_DIR"
 SUPPORT_URL = "https://www.tooltician.com"
 CRAWLER_REGISTRY_VERSION = "2026-06-26"
+REPORT_VERSION = "1.0.0"
+MODEL_VERSION = "2.0.0"
+VALID_EVIDENCE_LABELS = {"strong", "probable", "experimental", "heuristic"}
+EVIDENCE_REGISTRY = {
+    "geo-kdd-2024": {
+        "id": "geo-kdd-2024",
+        "title": "GEO: Generative Engine Optimization (KDD 2024)",
+        "url": "https://arxiv.org/abs/2311.09735",
+        "sourceType": "paper",
+        "lastVerified": "2024-08-01",
+    },
+    "what-gets-cited-2025": {
+        "id": "what-gets-cited-2025",
+        "title": "What Gets Cited: Measuring the Impact of GEO on LLM Citations",
+        "url": "https://arxiv.org/abs/2605.25517",
+        "sourceType": "paper",
+        "lastVerified": "2025-05-01",
+    },
+}
 OPENAI_CRAWLER_SOURCE = "https://developers.openai.com/api/docs/bots"
 ANTHROPIC_CRAWLER_SOURCE = (
     "https://support.claude.com/en/articles/"
@@ -70,6 +89,336 @@ AI_CRAWLER_REGISTRY = [
 for crawler_entry in AI_CRAWLER_REGISTRY:
     crawler_entry["lastVerified"] = CRAWLER_REGISTRY_VERSION
 AI_CRAWLER_AGENTS = [entry["token"] for entry in AI_CRAWLER_REGISTRY]
+
+
+def create_finding(
+    rule_id,
+    category,
+    severity,
+    message,
+    evidence_label,
+    applicability="common",
+    source_refs=None,
+    observed_facts=None,
+    remediation=None,
+):
+    if evidence_label not in VALID_EVIDENCE_LABELS:
+        raise ValueError(f'Invalid evidenceLabel "{evidence_label}" for rule {rule_id}')
+    source_refs = source_refs or []
+    missing_refs = [ref for ref in source_refs if ref not in EVIDENCE_REGISTRY]
+    if missing_refs:
+        raise ValueError(
+            f"Unknown source refs for rule {rule_id}: {', '.join(missing_refs)}"
+        )
+    return {
+        "ruleId": rule_id,
+        "category": category,
+        "severity": severity,
+        "status": severity,
+        "message": message,
+        "evidenceLabel": evidence_label,
+        "applicability": applicability,
+        "sourceRefs": source_refs,
+        "observedFacts": observed_facts or {},
+        "remediation": remediation,
+    }
+
+
+def build_report_meta():
+    generated_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+    return {
+        "reportVersion": REPORT_VERSION,
+        "modelVersion": MODEL_VERSION,
+        "generatedAt": generated_at.replace("+00:00", "Z"),
+    }
+
+
+def map_legacy_to_findings(
+    intro_word_count,
+    intro_has_definition,
+    has_table,
+    has_list,
+    has_headers,
+    has_semantic_html,
+    has_dynamic_rendering,
+    total_stat_count,
+    quote_count,
+    link_count,
+    has_sources_section,
+    pronoun_density,
+    pronoun_limit,
+    unexplained_acronyms,
+):
+    findings = []
+
+    intro_in_range = 40 <= intro_word_count <= 90
+    if intro_word_count:
+        intro_message = (
+            f"Intro paragraph is {intro_word_count} words"
+            f"{' and contains definition markers' if intro_has_definition else ''}."
+            if intro_in_range
+            else f"Intro paragraph has {intro_word_count} words (heuristic range: 40–90)."
+        )
+    else:
+        intro_message = "No intro paragraph found."
+    findings.append(
+        create_finding(
+            "content.intro_definition",
+            "structure",
+            "pass" if intro_in_range else ("warn" if intro_word_count else "fail"),
+            intro_message,
+            "experimental",
+            source_refs=["geo-kdd-2024"],
+            observed_facts={
+                "wordCount": intro_word_count,
+                "hasDefinition": intro_has_definition,
+            },
+            remediation=(
+                None
+                if intro_in_range
+                else (
+                    "Lead with a direct, self-contained definition of the main topic. "
+                    "The 40–90 word range was observed in one controlled benchmark and "
+                    "is not a universal requirement."
+                    if intro_word_count
+                    else "Add a direct, self-contained opening paragraph that defines "
+                    "the main topic or entity."
+                )
+            ),
+        )
+    )
+
+    binary_structure_findings = [
+        (
+            "content.tables",
+            has_table,
+            "Structured data tables present.",
+            "No tables found.",
+            "Use tables for feature comparisons, pricing, or structured reference data "
+            "where appropriate.",
+            "hasTable",
+        ),
+        (
+            "content.lists",
+            has_list,
+            "Bulleted or numbered lists present.",
+            "No lists found.",
+            "Use bulleted or numbered lists to break up dense paragraphs.",
+            "hasList",
+        ),
+        (
+            "content.headings",
+            has_headers,
+            "Clean H2/H3 heading hierarchy found.",
+            "No H2/H3 headers found.",
+            "Add H2 and H3 section headings to organize content for both readers and "
+            "retrieval systems.",
+            "hasHeaders",
+        ),
+    ]
+    for rule_id, present, pass_message, warn_message, remediation, fact_name in (
+        binary_structure_findings
+    ):
+        findings.append(
+            create_finding(
+                rule_id,
+                "structure",
+                "pass" if present else "warn",
+                pass_message if present else warn_message,
+                "heuristic",
+                observed_facts={fact_name: present},
+                remediation=None if present else remediation,
+            )
+        )
+
+    if has_semantic_html is not None:
+        findings.append(
+            create_finding(
+                "content.semantic_html",
+                "structure",
+                "pass" if has_semantic_html else "warn",
+                (
+                    "Good HTML5 semantic layout tags present."
+                    if has_semantic_html
+                    else "Lacks HTML5 structural tags (e.g. <main>, <article>)."
+                ),
+                "heuristic",
+                observed_facts={"hasSemanticHtml": has_semantic_html},
+                remediation=(
+                    None
+                    if has_semantic_html
+                    else "Use HTML5 semantic elements (<main>, <article>, <nav>, "
+                    "<section>) to help parsers identify content regions."
+                ),
+            )
+        )
+
+    if has_dynamic_rendering:
+        findings.append(
+            create_finding(
+                "content.dynamic_rendering",
+                "structure",
+                "warn",
+                "Detected client-side JS references. Ensure content is pre-rendered / "
+                "SSR for AI crawler searchability.",
+                "heuristic",
+                observed_facts={"hasDynamicRendering": True},
+                remediation="Pre-render or server-side render (SSR) content so that AI "
+                "crawlers can access it without executing JavaScript.",
+            )
+        )
+
+    findings.append(
+        create_finding(
+            "content.statistics_density",
+            "statistics",
+            "pass" if total_stat_count >= 3 else "warn",
+            (
+                f"High numerical evidence density ({total_stat_count} data points found)."
+                if total_stat_count >= 3
+                else (
+                    f"Moderate numerical evidence density ({total_stat_count} data points found)."
+                    if total_stat_count
+                    else "No statistics or numerical evidence found."
+                )
+            ),
+            "heuristic",
+            observed_facts={"totalStatCount": total_stat_count},
+            remediation=(
+                None
+                if total_stat_count >= 3
+                else "Where accurate data is available, add specific metrics, percentages, "
+                "or numerical evidence. Do not fabricate statistics."
+            ),
+        )
+    )
+
+    findings.append(
+        create_finding(
+            "content.quotation_density",
+            "quotations",
+            "pass" if quote_count >= 2 else "warn",
+            (
+                f"High quotation density ({quote_count} quotes found)."
+                if quote_count >= 2
+                else (
+                    f"Moderate quotation density ({quote_count} quotes found)."
+                    if quote_count
+                    else "No expert quotes or direct attributions found."
+                )
+            ),
+            "experimental",
+            source_refs=["geo-kdd-2024"],
+            observed_facts={"quoteCount": quote_count},
+            remediation=(
+                None
+                if quote_count >= 2
+                else "Include attributed quotes from named sources with verifiable "
+                "credentials where they strengthen the content. Do not fabricate quotes."
+            ),
+        )
+    )
+
+    findings.append(
+        create_finding(
+            "content.citation_links",
+            "citations",
+            "pass" if link_count >= 3 else "warn",
+            (
+                f"High authority link density ({link_count} external links found)."
+                if link_count >= 3
+                else (
+                    f"Moderate link density ({link_count} external links found)."
+                    if link_count
+                    else "No external hyperlinks found."
+                )
+            ),
+            "probable",
+            source_refs=["geo-kdd-2024", "what-gets-cited-2025"],
+            observed_facts={"linkCount": link_count},
+            remediation=(
+                None
+                if link_count >= 3
+                else "Link key claims to reputable primary sources. Do not add citations "
+                "to unverified or irrelevant material."
+            ),
+        )
+    )
+
+    findings.append(
+        create_finding(
+            "content.references_section",
+            "citations",
+            "pass" if has_sources_section else "warn",
+            (
+                "Dedicated citation/sources section found."
+                if has_sources_section
+                else "No dedicated citation section found."
+            ),
+            "probable",
+            source_refs=["what-gets-cited-2025"],
+            observed_facts={"hasSourcesSection": has_sources_section},
+            remediation=(
+                None
+                if has_sources_section
+                else "Consider adding a '# Sources' or '# References' section listing "
+                "cited resources."
+            ),
+        )
+    )
+
+    pronoun_over_limit = pronoun_density > pronoun_limit
+    findings.append(
+        create_finding(
+            "content.pronoun_density",
+            "clarity",
+            "warn" if pronoun_over_limit else "pass",
+            (
+                f"Ambiguous pronoun density is {pronoun_density * 100:.1f}% "
+                f"(project threshold: {pronoun_limit * 100:.0f}%)."
+                if pronoun_over_limit
+                else f"Ambiguous pronoun density is {pronoun_density * 100:.1f}% "
+                "(within project threshold)."
+            ),
+            "heuristic",
+            observed_facts={
+                "pronounDensity": round(pronoun_density, 3),
+                "pronounLimit": pronoun_limit,
+            },
+            remediation=(
+                "Replace ambiguous pronouns ('it', 'they', 'this') with specific entity "
+                "names where clarity is at risk. The percentage threshold is a "
+                "project-internal benchmark, not a platform requirement."
+                if pronoun_over_limit
+                else None
+            ),
+        )
+    )
+
+    findings.append(
+        create_finding(
+            "content.acronym_clarity",
+            "clarity",
+            "warn" if unexplained_acronyms else "pass",
+            (
+                f"Unexplained acronyms found: {', '.join(unexplained_acronyms)}."
+                if unexplained_acronyms
+                else "All acronyms are defined or none detected."
+            ),
+            "heuristic",
+            observed_facts={
+                "unexplainedCount": len(unexplained_acronyms),
+                "unexplained": unexplained_acronyms,
+            },
+            remediation=(
+                "Spell out acronyms on first occurrence (e.g., 'SaaS (Software as a Service)')."
+                if unexplained_acronyms
+                else None
+            ),
+        )
+    )
+
+    return findings
 
 
 def resolve_license_key(config, env=None):
@@ -1013,6 +1362,10 @@ def _count_blockquotes(tokens):
     return count
 
 
+def _count_markdown_blockquote_groups(content):
+    return len(re.findall(r"(?m)(?:^>[^\n]*(?:\n|$))+", content))
+
+
 def _has_md_table(tokens):
     def walk(tok):
         if isinstance(tok, list):
@@ -1059,6 +1412,15 @@ def audit_file(filepath, config, output_format="text", _content=None):
 
     text_content = preprocess_content(content)
     md_tokens = _parse_md_tokens(text_content)
+    intro_word_count = 0
+    intro_has_definition = False
+    has_semantic_html = None
+    has_dynamic_rendering = False
+    observed_pronoun_density = 0
+    observed_pronoun_limit = config.get("limits", {}).get(
+        "max_pronoun_density", MAX_PRONOUN_DENSITY
+    )
+    observed_unexplained_acronyms = []
 
     # 1. Answer-First & Structure (Max 20 pts)
     struct_score = 0
@@ -1075,6 +1437,8 @@ def audit_file(filepath, config, output_format="text", _content=None):
         words = intro_para.split()
         word_count = len(words)
         is_definition = any(verb in intro_para.lower() for verb in [" is a ", " is an ", " refers to ", " represents ", " is the strategic "])
+        intro_word_count = word_count
+        intro_has_definition = is_definition
         
         if 40 <= word_count <= 90:
             if is_definition:
@@ -1089,21 +1453,27 @@ def audit_file(filepath, config, output_format="text", _content=None):
         struct_breakdown.append("Answer-First: No intro paragraph found (+0 pts)")
         
     if _has_md_table(md_tokens) or "<table>" in text_content.lower():
+        has_table = True
         struct_score += 4
         struct_breakdown.append("Tables: Structured data tables present (+4 pts)")
     else:
+        has_table = False
         struct_breakdown.append("Tables: No tables found (+0 pts)")
         
     if _has_md_list(md_tokens):
+        has_list = True
         struct_score += 3
         struct_breakdown.append("Lists: Bulleted or numbered lists present (+3 pts)")
     else:
+        has_list = False
         struct_breakdown.append("Lists: No lists found (+0 pts)")
         
     if re.search(r'^##+\s+\w+', text_content, re.MULTILINE) or re.search(r'<h[234]>', text_content.lower()):
+        has_headers = True
         struct_score += 3
         struct_breakdown.append("Headers: Clean H2/H3 hierarchy found (+3 pts)")
     else:
+        has_headers = False
         struct_breakdown.append("Headers: No H2/H3 headers found (+0 pts)")
 
     # Check for HTML semantic layout if it's an HTML file (Technical AI Readiness)
@@ -1114,6 +1484,7 @@ def audit_file(filepath, config, output_format="text", _content=None):
         soup = BeautifulSoup(content, "html.parser")
         semantic_tags = ["article", "main", "header", "footer", "nav", "section"]
         found_tags = [t for t in semantic_tags if soup.find(t) is not None]
+        has_semantic_html = len(found_tags) >= 3
         if len(found_tags) >= 3:
             struct_breakdown.append(
                 f"Semantic HTML: Good HTML5 layout tags used (<{'}>, <{'.join(found_tags)}>) (+0 pts)"
@@ -1130,6 +1501,7 @@ def audit_file(filepath, config, output_format="text", _content=None):
         # SPA / client-side rendering detection.
         has_app_container = soup.select_one('[id="app"], [id="root"]') is not None
         has_framework_code = bool(re.search(r'createapp\(|reactdom\.render\(', html_lowered))
+        has_dynamic_rendering = has_app_container or has_framework_code
         if has_app_container or has_framework_code:
             struct_breakdown.append(
                 "Dynamic Rendering Warning: Detects client-side JS references. "
@@ -1188,7 +1560,10 @@ def audit_file(filepath, config, output_format="text", _content=None):
 
     # 3. Quotation Density (Max 20 pts)
     quotes_score = 0
-    blockquote_count = _count_blockquotes(md_tokens)
+    blockquote_count = max(
+        _count_blockquotes(md_tokens),
+        _count_markdown_blockquote_groups(content),
+    )
     inline_quotes = re.findall(r'"([^"]{15,})"', text_content)
     quote_count = blockquote_count + len(inline_quotes)
     
@@ -1238,6 +1613,8 @@ def audit_file(filepath, config, output_format="text", _content=None):
         pronoun_density = pronoun_count / total_word_count
         
         pronoun_limit = config.get("limits", {}).get("max_pronoun_density", MAX_PRONOUN_DENSITY)
+        observed_pronoun_density = pronoun_density
+        observed_pronoun_limit = pronoun_limit
         if pronoun_density > pronoun_limit:
             deduction = min(15, int((pronoun_density - pronoun_limit) * 100))
             clarity_score -= deduction
@@ -1276,6 +1653,7 @@ def audit_file(filepath, config, output_format="text", _content=None):
                     unexplained.append(acr)
         
         if unexplained:
+            observed_unexplained_acronyms = unexplained
             deduct_pts = min(5, len(unexplained))
             clarity_score -= deduct_pts
             clarity_breakdown.append(f"Acronym Clarity: Unexplained acronyms found: {', '.join(unexplained)}. Spell them out on first mention (-{deduct_pts} pts)")
@@ -1285,6 +1663,23 @@ def audit_file(filepath, config, output_format="text", _content=None):
         clarity_breakdown.append("Empty file or no words found.")
 
     total_score = struct_score + stats_score + quotes_score + citation_score + clarity_score
+    findings = map_legacy_to_findings(
+        intro_word_count,
+        intro_has_definition,
+        has_table,
+        has_list,
+        has_headers,
+        has_semantic_html,
+        has_dynamic_rendering,
+        total_stat_count,
+        quote_count,
+        link_count,
+        has_sources_header,
+        observed_pronoun_density,
+        observed_pronoun_limit,
+        observed_unexplained_acronyms,
+    )
+    report_meta = build_report_meta()
 
     recs = []
     if struct_score < 15:
@@ -1331,7 +1726,9 @@ def audit_file(filepath, config, output_format="text", _content=None):
                     "details": clarity_breakdown
                 }
             },
-            "recommendations": recs
+            "recommendations": recs,
+            "findings": findings,
+            **report_meta,
         }
         print(json.dumps(report_data, indent=2, ensure_ascii=False))
     else:
