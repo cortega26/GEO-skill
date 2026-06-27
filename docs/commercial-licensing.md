@@ -4,8 +4,9 @@
 **Last verified:** 2026-06-27 at commit `f91fae7`
 
 `geo-opt` is currently distributed under the Tooltician Community License 1.0
-with a separate commercial path for customers that need branding-free injected
-output or rights beyond the Community terms. The commercial path is not yet
+with a separate commercial path for customers that need batch and recursive
+workflows, file generation and injection, CI/CD quality gates, branding-free
+output, or rights beyond the Community terms. The commercial path is not yet
 generally available because the included terms still require qualified legal
 review.
 
@@ -14,17 +15,24 @@ offer to sell a license.
 
 ## Current distinction
 
-| Capability                               | Community                  | Commercial entitlement                 |
-| ---------------------------------------- | -------------------------- | -------------------------------------- |
-| Local content audits                     | Included                   | Included                               |
-| Recursive and JSON audit workflows       | Included                   | Included                               |
-| JSON-LD generation and validation        | Included                   | Included                               |
-| `robots.txt` and `llms.txt` tools        | Included                   | Included                               |
-| Source access                            | Community License terms    | Applicable commercial terms            |
-| Credit in injected output                | Required                   | May be omitted                         |
-| `--no-branding`                          | Rejected                   | Enabled with a valid local entitlement |
-| Local support reminders                  | Infrequent and disableable | Suppressed                             |
-| Redistribution, embedding, or OEM rights | Community terms only       | Requires an explicit written grant     |
+| Capability | Community | Commercial entitlement |
+|---|---|---|
+| Auditoría de un solo archivo (`audit <file>`) | Incluido | Incluido |
+| Auditoría recursiva, multi-archivo y agregados | ❌ | Incluido |
+| `audit --threshold` (CI/CD quality gate) | ❌ | Incluido |
+| Generación JSON-LD por stdout (`schema`) | Incluido, con branding | Incluido |
+| Validación JSON-LD (`validate`) | Incluido | Incluido |
+| Inyección JSON-LD (`inject`) | ❌ | Incluido |
+| `robots.txt` y `llms.txt` auditoría | Incluido | Incluido |
+| `robots.txt` y `llms.txt` generación | ❌ | Incluido |
+| `--no-branding` | ❌ | Incluido con titularidad válida |
+| API de librería: funciones de lectura | Incluido | Incluido |
+| API de librería: funciones de lote y escritura | ❌ | Incluido |
+| Acceso al código fuente | Community License terms | Términos comerciales aplicables |
+| Recordatorios de soporte | Infrecuentes y desactivables | Suprimidos |
+| Redistribución, embedding u OEM | Solo términos Community | Requiere autorización escrita expresa |
+
+La tabla comparativa completa está en [`docs/free-vs-pro.md`](free-vs-pro.md).
 
 Commercial licensing does not change the audit score and does not promise
 ranking, retrieval, inclusion, mention, or citation by an AI system.
@@ -48,8 +56,10 @@ to source control.
 }
 ```
 
-When no valid entitlement is available, the audit and generation workflows
-remain usable. Only branding-free injection is rejected.
+Cuando no hay una titularidad válida, las operaciones de lectura sobre un solo
+archivo y la generación de schema por stdout permanecen utilizables. Las
+operaciones de lote, escritura y generación de archivos requieren Pro. Consulta
+[`docs/free-vs-pro.md`](free-vs-pro.md) para el desglose completo.
 
 ## Community reminder policy
 

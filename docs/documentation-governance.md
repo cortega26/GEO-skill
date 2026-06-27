@@ -28,7 +28,7 @@ maintainer cannot sustain.
 | Class                     | Documents                                                            | Purpose                                            | Update policy                                        |
 | ------------------------- | -------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
 | Normative engineering     | `AGENTS.md`, this document, `docs/architecture.md`                   | Invariants, ownership and engineering contracts    | Update with architectural or workflow decisions      |
-| Public user documentation | `README.md`, bundled `SKILL.md`, `docs/commercial-licensing.md`      | Current supported behavior and limitations         | Must match executable and tested behavior            |
+| Public user documentation | `README.md`, bundled `SKILL.md`, `docs/free-vs-pro.md`, `docs/commercial-licensing.md` | Current supported behavior and limitations         | Must match executable and tested behavior            |
 | Operational planning      | `plans/README.md`, active numbered plans, `plans/business/`          | Current roadmap, gates and implementation handoffs | Reconcile after material merges and decisions        |
 | Product/legal authority   | `LICENSE`, `COMMERCIAL-LICENSE.md`, `plans/business/decision-log.md` | Binding terms and approved product decisions       | Change only through explicit legal/product decisions |
 | Historical record         | `CHANGELOG.md`, `LICENSE-HISTORY.md`, `plans/archive/`               | What happened and why                              | Append or annotate; do not modernize retrospectively |
@@ -49,6 +49,7 @@ maintainer cannot sustain.
 | Current roadmap and execution order                  | `plans/README.md`                                                            | Status blocks in active plans                       |
 | Approved business direction and gates                | `plans/business/decision-log.md` and plan 018                                | `plans/README.md`, public copy after approval       |
 | Licensing terms                                      | `LICENSE`, `COMMERCIAL-LICENSE.md`                                           | README and `docs/commercial-licensing.md` summaries |
+| Free/Pro feature boundary                            | `docs/free-vs-pro.md`                                                        | README, `docs/commercial-licensing.md`, CLI error messages |
 | Release history                                      | `CHANGELOG.md`                                                               | Release notes when published                        |
 
 The capability matrix is normative for what the project commits to support

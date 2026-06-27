@@ -281,21 +281,26 @@ node bin/cli.js config set reminders false
   [`docs/telemetry.md`](docs/telemetry.md). Nothing is ever sent without
   explicit opt-in, and `DO_NOT_TRACK` is honored.
 
-## Community and commercial use
+## Free vs. Pro
 
-The Community edition includes the complete local audit, schema, validation,
-batch, crawler, and `llms.txt` workflows. Injected Community output carries a
-visible `Optimized with Tooltician` credit.
+`geo-opt` Free cubre la auditoría y validación de páginas individuales. `geo-opt`
+Pro desbloquea operaciones de escritura, procesamiento por lote, quality gates de
+CI/CD y salida sin marca.
 
-A valid Tooltician commercial entitlement permits branding-free injection with
-`--no-branding` and grants the rights stated in the applicable order and
-commercial terms. The current entitlement check is local and is a convenience
-gate, not strong digital rights management.
+**Si puedes leerlo, es Free. Si lo escribes o lo escalas, es Pro.**
 
-Commercial licensing is not yet generally available: the included commercial
-terms remain a draft pending qualified legal review. See
-[commercial licensing](docs/commercial-licensing.md) for the implemented
-distinction and current limitations.
+La tabla comparativa completa —comandos CLI, API de librería y ejemplos— está en
+[`docs/free-vs-pro.md`](docs/free-vs-pro.md).
+
+La salida inyectada con la edición gratuita incluye la atribución
+`Optimized with Tooltician`. Una clave de licencia Tooltician comercial válida
+permite omitirla con `--no-branding` y otorga los derechos detallados en los
+términos comerciales aplicables. La verificación de titularidad es local y no
+envía contenido ni datos a Tooltician.
+
+Las licencias comerciales todavía no están disponibles para compra general. Los
+términos comerciales están redactados y pendientes de revisión legal cualificada.
+Para más detalles consulta [`docs/commercial-licensing.md`](docs/commercial-licensing.md).
 
 ## JavaScript library
 
