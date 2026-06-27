@@ -46,4 +46,5 @@ geo_config.json
 .claude/
 .continue/
 .codegraph/
+deep-research/
 daemon.pid
