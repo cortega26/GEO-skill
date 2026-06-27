@@ -9,6 +9,13 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Added
 
+- Dormant, opt-in telemetry scaffold (`src/telemetry.js`): a consent gate and a
+  frozen, content-free event schema (`schemaVersion: 1`). The transport is
+  disabled (`TELEMETRY_TRANSPORT_ENABLED = false`), so no prompt is shown and no
+  network activity occurs — "no telemetry by default" stays literally true. New
+  `geo-opt config get|set telemetry true|false` preference, `GEO_OPT_TELEMETRY`
+  override, and `DO_NOT_TRACK` support. Design and activation checklist in
+  `docs/telemetry.md`. Covered by `tests/telemetry.test.js`.
 - Reproducible publish artifact: `npm run build` now stages `src/` and `bin/`
   into `dist/` without touching tracked source files. The published package
   ships `dist/` exclusively; `npm pack` and `npm publish` both use `prepack`
