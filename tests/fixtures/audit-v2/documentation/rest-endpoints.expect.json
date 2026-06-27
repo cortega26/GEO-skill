@@ -1,0 +1,32 @@
+{
+  "profile": "documentation",
+  "description": "REST API endpoint documentation — rich structure, tables, JSON examples, RFC link. Well-structured technical reference that earns high marks on structure and clarity without needing quotes or statistics.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": false,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 2,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

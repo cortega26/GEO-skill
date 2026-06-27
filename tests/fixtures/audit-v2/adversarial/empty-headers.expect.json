@@ -1,0 +1,32 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Document with 14 headings but zero body content under any of them except a one-sentence conclusion. Looks structured but delivers no information. V2 should detect empty sections and flag severely.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "superficial",
+      "hasTables": false,
+      "hasLists": false,
+      "sectionSelfContainment": "none"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "none",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["empty_sections", "no_body_content", "heading_shell"]
+}

@@ -1,0 +1,34 @@
+{
+  "profile": "ecommerce",
+  "description": "Product detail page with specs table, customer reviews (quotes), and structured data. Ecommerce profile should credit customer reviews as valid quotes and specs as valid data points.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": true,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 12,
+      "hasAttribution": false,
+      "attributionQuality": "heuristic"
+    },
+    "quotations": {
+      "count": 3,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "citations": {
+      "externalLinkCount": 3,
+      "linkQuality": "medium",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": []
+}

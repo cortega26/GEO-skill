@@ -1,0 +1,34 @@
+{
+  "profile": "editorial",
+  "description": "News article covering a Google guideline update — attributed statistics, dated quote, dedicated sources section. Strong in all editorial dimensions.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": true,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 2,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "quotations": {
+      "count": 1,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "citations": {
+      "externalLinkCount": 3,
+      "linkQuality": "high",
+      "hasSourcesSection": true
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": []
+}

@@ -1,0 +1,33 @@
+{
+  "profile": "regulated",
+  "description": "Medical patient guide with review date, author credentials, attributed statistics from CDC/IDF/ADA, and complete sources section. Regulated content should earn high marks for citations, clarity, and structure without needing quotes.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": true,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 5,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 4,
+      "linkQuality": "high",
+      "hasSourcesSection": true
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations"],
+  "adversarialFlags": []
+}

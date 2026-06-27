@@ -1,0 +1,33 @@
+{
+  "profile": "ecommerce",
+  "description": "Product category listing page — semantic HTML5 with article elements, filters, review counts. Ecommerce listing: good structure, but thin on substantive content (no detailed specs or quotes).",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "high",
+      "semanticHtml": true
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

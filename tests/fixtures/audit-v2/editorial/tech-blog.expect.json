@@ -1,0 +1,34 @@
+{
+  "profile": "editorial",
+  "description": "Well-researched technical blog with attributed statistics, properly cited quotes, a dedicated sources section, and clear structure. This is the gold standard for editorial content.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": true,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 5,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "quotations": {
+      "count": 1,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "citations": {
+      "externalLinkCount": 3,
+      "linkQuality": "high",
+      "hasSourcesSection": true
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": []
+}

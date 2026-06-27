@@ -1,0 +1,32 @@
+{
+  "profile": "commercial",
+  "description": "Product features page — profile awareness table, feature lists, code example. Commercial content that benefits from its own profile-aware table showing which dimensions matter per content type.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 1,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations"],
+  "adversarialFlags": []
+}

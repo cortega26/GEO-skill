@@ -1,0 +1,32 @@
+{
+  "profile": "open-source",
+  "description": "OpenFeature SDK README — badges, install, usage, provider table, hooks. Well-structured open-source readme that excels in structure and citations without being penalized for lacking quotes.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 5,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

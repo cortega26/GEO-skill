@@ -1,0 +1,34 @@
+{
+  "profile": "editorial",
+  "description": "Personal opinion piece with one attributed stat and one attributed quote. Light on sources but that's expected for the format. The v2 model should not penalize opinion pieces for lacking dense citations.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "medium"
+    },
+    "statistics": {
+      "count": 1,
+      "hasAttribution": true,
+      "attributionQuality": "probable"
+    },
+    "quotations": {
+      "count": 1,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "medium",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": []
+}

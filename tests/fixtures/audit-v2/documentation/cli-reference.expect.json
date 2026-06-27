@@ -1,0 +1,32 @@
+{
+  "profile": "documentation",
+  "description": "CLI reference — tables of options, commands, exit codes, env vars. Pure technical reference.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": false,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "not_applicable",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

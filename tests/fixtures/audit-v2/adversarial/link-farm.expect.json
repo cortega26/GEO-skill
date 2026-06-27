@@ -1,0 +1,32 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Link farm — 40+ external links with almost zero original content. Each 'section' is just a list of links. V2 should flag excessive link-to-content ratio and lack of substantive analysis.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "superficial",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "low"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 40,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["link_farm", "thin_content", "excessive_links"]
+}

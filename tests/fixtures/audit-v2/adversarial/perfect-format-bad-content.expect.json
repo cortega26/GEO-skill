@@ -1,0 +1,32 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Perfectly formatted article with clean headings, lists, and a references section — but every sentence is a generic platitude. Zero specific data, zero named sources, zero original insight. V2 must not be fooled by excellent formatting wrapping empty content.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "low"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "none",
+      "hasSourcesSection": true
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["generic_content", "no_specific_data", "vague_sources", "platitudes"]
+}

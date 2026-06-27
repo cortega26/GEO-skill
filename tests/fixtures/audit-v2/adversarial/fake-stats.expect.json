@@ -1,0 +1,34 @@
+{
+  "profile": "commercial",
+  "description": "ADVERSARIAL: Marketing page with implausibly precise statistics (99.8%, 347%, 99.9999%), no sources or methodology for any claim, anonymous quote from 'CEO of a major company', and generic superlatives. V2 should flag fabricated-looking stats and unattributed claims.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "medium"
+    },
+    "statistics": {
+      "count": 10,
+      "hasAttribution": false,
+      "attributionQuality": "none"
+    },
+    "quotations": {
+      "count": 1,
+      "hasAttribution": false,
+      "attributionQuality": "none"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "none",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "medium",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["fabricated_stats", "unattributed_quotes", "implausible_precision"]
+}

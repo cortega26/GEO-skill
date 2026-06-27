@@ -1,0 +1,32 @@
+{
+  "profile": "open-source",
+  "description": "Contributing guide — structured with headings, checklists, code blocks. Useful reference doc that doesn't need quotes or statistics to be effective.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 3,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 2,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations"],
+  "adversarialFlags": []
+}

@@ -1,0 +1,32 @@
+{
+  "profile": "regulated",
+  "description": "Privacy policy — legally required document with dated sections, retention tables, subprocessor disclosure, and GDPR rights. Excellent structure and clarity without needing quotes or statistics.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 1,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

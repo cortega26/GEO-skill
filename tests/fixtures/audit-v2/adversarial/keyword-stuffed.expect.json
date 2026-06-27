@@ -1,0 +1,32 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Keyword-stuffed article — 'SEO' appears 50+ times, 'search engine optimization' 30+ times. Sentences are circular and content-free. V2 should detect unnaturally high keyword density and penalize accordingly.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "low"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 2,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["keyword_stuffing", "circular_content", "thin_content"]
+}

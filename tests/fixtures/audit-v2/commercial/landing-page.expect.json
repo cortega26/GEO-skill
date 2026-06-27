@@ -1,0 +1,33 @@
+{
+  "profile": "commercial",
+  "description": "SaaS landing page — semantic HTML5, pricing table, social proof logos, clear CTA. Good for commercial profile: strong structure and clarity, no need for academic citations.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": true,
+      "sectionSelfContainment": "medium",
+      "semanticHtml": true
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "medium",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations", "statistics"],
+  "adversarialFlags": []
+}

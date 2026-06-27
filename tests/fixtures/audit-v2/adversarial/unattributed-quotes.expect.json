@@ -1,0 +1,34 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Article with six block quotes containing specific predictions and statistics, but zero attributions — no names, no affiliations, no dates. V2 should flag unattributed quotes and fabricated-sounding predictions.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": false,
+      "sectionSelfContainment": "low"
+    },
+    "statistics": {
+      "count": 2,
+      "hasAttribution": false,
+      "attributionQuality": "none"
+    },
+    "quotations": {
+      "count": 6,
+      "hasAttribution": false,
+      "attributionQuality": "none"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "none",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "medium",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["unattributed_quotes", "fabricated_stats", "vague_claims"]
+}

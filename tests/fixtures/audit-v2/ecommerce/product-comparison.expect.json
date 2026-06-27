@@ -1,0 +1,33 @@
+{
+  "profile": "ecommerce",
+  "description": "Product comparison page with specs table, customer quotes, and buying guidance. Good ecommerce content: structured data, social proof through reviews, clear recommendations.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": true,
+      "headingHierarchy": "valid",
+      "hasTables": true,
+      "hasLists": false,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 3,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "low",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "medium",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["statistics"],
+  "adversarialFlags": []
+}

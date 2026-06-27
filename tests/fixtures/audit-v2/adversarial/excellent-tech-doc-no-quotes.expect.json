@@ -1,0 +1,33 @@
+{
+  "profile": "documentation",
+  "description": "CRITICAL TEST CASE: Excellent technical documentation — specific SQL examples, version numbers, performance benchmarks, known limitations, and backward compatibility notes. Zero quotes, zero marketing statistics. Under v1 this would score poorly for lacking quotes and statistics. V2 with documentation profile MUST rank this highly because quotes and statistics are not applicable to API/tech reference content.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "high"
+    },
+    "statistics": {
+      "count": 8,
+      "hasAttribution": true,
+      "attributionQuality": "strong"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 1,
+      "linkQuality": "high",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": ["quotations"],
+  "adversarialFlags": []
+}

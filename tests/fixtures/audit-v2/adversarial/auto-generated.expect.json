@@ -1,0 +1,32 @@
+{
+  "profile": "editorial",
+  "description": "ADVERSARIAL: Obviously AI-generated content — generic hedging language ('in the ever-evolving landscape', 'it is important to note'), zero specific data, zero examples, zero sources. Every paragraph says the same thing in different words. V2 should detect low information density and generic patterns.",
+  "observations": {
+    "structure": {
+      "hasAnswerFirst": false,
+      "headingHierarchy": "valid",
+      "hasTables": false,
+      "hasLists": true,
+      "sectionSelfContainment": "low"
+    },
+    "statistics": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "quotations": {
+      "count": 0,
+      "hasAttribution": "not_applicable"
+    },
+    "citations": {
+      "externalLinkCount": 0,
+      "linkQuality": "none",
+      "hasSourcesSection": false
+    },
+    "clarity": {
+      "pronounDensity": "low",
+      "acronymsExplained": true
+    }
+  },
+  "notApplicableDimensions": [],
+  "adversarialFlags": ["auto_generated", "generic_patterns", "no_specifics", "filler_content", "hedging_language"]
+}
