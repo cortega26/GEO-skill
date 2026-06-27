@@ -126,6 +126,12 @@ If `.codegraph/` does not exist or CodeGraph reports "not initialized," ask:
 - Community support reminders must stay local-only, non-blocking,
   automation-safe, no more than weekly, and user-disableable through
   `geo-opt config set reminders false`.
+- Telemetry is opt-in only and currently dormant
+  (`TELEMETRY_TRANSPORT_ENABLED = false`, no prompt, no network). Events must be
+  built solely from the frozen `TELEMETRY_EVENT_FIELDS` allowlist — never audited
+  content, paths, URLs, file names, or config. Honor `DO_NOT_TRACK`. Do not flip
+  the transport switch without the `docs/telemetry.md` activation checklist
+  (endpoint, privacy policy, first-use prompt, README update).
 - Never infer author, publisher, publication date, price, or availability for
   generated structured data.
 - Preserve unrelated working-tree changes. Do not stage or commit files that are

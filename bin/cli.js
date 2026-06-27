@@ -26,6 +26,7 @@ import {
   validateSchemaFile,
 } from "../src/index.js";
 import { scoreContentV2 } from "../src/scoring-v2.js";
+import { CONSENT_GRANTED, resolveTelemetryStatus, setTelemetryConsent } from "../src/telemetry.js";
 
 // --- Global --config option ---
 function resolveConfig(cmd) {
@@ -771,24 +772,38 @@ program
 // --- Config ---
 program
   .command("config <action> <setting> [value]")
-  .description("Manage local geo-opt preferences (get|set reminders true|false)")
+  .description("Manage local geo-opt preferences (get|set reminders|telemetry true|false)")
   .action((action, setting, value, _options, _cmd) => {
-    if (setting !== "reminders" || !["get", "set"].includes(action)) {
-      console.error("Error: Usage: geo-opt config <get|set> reminders [true|false]");
+    if (!["reminders", "telemetry"].includes(setting) || !["get", "set"].includes(action)) {
+      console.error("Error: Usage: geo-opt config <get|set> <reminders|telemetry> [true|false]");
       process.exit(1);
     }
 
     if (action === "get") {
+      if (setting === "telemetry") {
+        console.log(resolveTelemetryStatus().decision === CONSENT_GRANTED ? "true" : "false");
+        return;
+      }
       console.log(remindersAreEnabled() ? "true" : "false");
       return;
     }
 
     if (!["true", "false"].includes(value)) {
-      console.error("Error: reminders must be true or false.");
+      console.error(`Error: ${setting} must be true or false.`);
       process.exit(1);
     }
 
     const enabled = value === "true";
+
+    if (setting === "telemetry") {
+      if (!setTelemetryConsent(enabled ? "granted" : "denied")) {
+        console.error("Error: Could not save the local telemetry preference.");
+        process.exit(1);
+      }
+      console.log(`Anonymous telemetry ${enabled ? "enabled" : "disabled"}.`);
+      return;
+    }
+
     if (!setRemindersEnabled(enabled)) {
       console.error("Error: Could not save the local reminder preference.");
       process.exit(1);

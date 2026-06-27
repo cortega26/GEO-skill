@@ -221,6 +221,7 @@ replaces accessible HTML, `robots.txt`, sitemaps, and structured data.
 | `llmstxt generate [files...]` | Create `llms.txt` and optional `llms-full.txt`                                                   |
 | `llmstxt audit <file>`        | Check proposal structure and optional local coverage                                             |
 | `config get\|set reminders`   | Read or change the local support-reminder preference                                             |
+| `config get\|set telemetry`   | Read or change the local, opt-in telemetry preference (dormant; see below)                       |
 | `init`                        | Create a starter `geo_config.json`                                                               |
 
 ## Configuration
@@ -274,6 +275,12 @@ metadata merely to increase a score, and never commit license keys.
 ```bash
 node bin/cli.js config set reminders false
 ```
+
+- Telemetry is **off by default and currently dormant**: there is no consent
+  prompt and no network activity. The opt-in consent gate and a frozen,
+  content-free event schema are documented in
+  [`docs/telemetry.md`](docs/telemetry.md). Nothing is ever sent without
+  explicit opt-in, and `DO_NOT_TRACK` is honored.
 
 ## Community and commercial use
 
