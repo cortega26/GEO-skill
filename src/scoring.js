@@ -2,7 +2,7 @@ import fs from "fs";
 import * as cheerio from "cheerio";
 import { marked } from "marked";
 import chalk from "chalk";
-import { preprocessContent } from "./text.js";
+import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
 import { MAX_PRONOUN_DENSITY } from "./config.js";
 import { mapLegacyToFindings, buildReportMeta } from "./findings.js";
 import { EVIDENCE_REGISTRY } from "./evidence.js";
@@ -84,8 +84,25 @@ function hasMdList(tokens) {
 }
 
 export function scoreContent(content, filepath, config) {
-  const textContent = preprocessContent(content);
-  const tokens = marked.lexer(textContent); // AST for reliable structural queries
+  const isHtml = isHtmlContent(content) || filepath.endsWith(".html");
+  let textContent;
+  let tokens;
+  let htmlCheerio = null;
+  let htmlStructure = null;
+
+  if (isHtml) {
+    // ── HTML path: extraer texto visible con cheerio ──
+    htmlCheerio = cheerio.load(content);
+    htmlStructure = extractHtmlVisibleText(content);
+    textContent = htmlStructure.textContent;
+    // Para HTML, marked se usa solo para conteo de links en el texto visible;
+    // la estructura (headings, listas, tablas) se extrae vía cheerio.
+    tokens = marked.lexer(textContent);
+  } else {
+    // ── Markdown path ──
+    textContent = preprocessContent(content);
+    tokens = marked.lexer(textContent);
+  }
 
   // Hoisted variables for structured findings (plan 021)
   let introWordCount = 0;
@@ -105,10 +122,38 @@ export function scoreContent(content, filepath, config) {
     .map((l) => l.trim())
     .filter(Boolean);
   let introPara = "";
-  for (const line of lines) {
-    if (!line.startsWith("#")) {
-      introPara = line;
-      break;
+
+  if (isHtml && htmlCheerio) {
+    // ── HTML: buscar el primer <p> después del <h1> ──
+    const $ = htmlCheerio;
+    const h1 = $("h1").first();
+    let firstP = null;
+    if (h1.length) {
+      // Buscar el primer <p> después del h1
+      firstP = h1.nextAll("p").first();
+    }
+    if (!firstP || !firstP.length) {
+      // Fallback: primer <p> en el body
+      firstP = $("p").first();
+    }
+    if (firstP && firstP.length) {
+      introPara = firstP.text().replace(/\s+/g, " ").trim();
+    } else {
+      // Último fallback: primera línea no-heading del texto visible
+      for (const line of lines) {
+        if (line.length > 20 && !/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s*[\|\-—–]/.test(line)) {
+          introPara = line;
+          break;
+        }
+      }
+    }
+  } else {
+    // ── Markdown: buscar la primera línea que no sea heading ──
+    for (const line of lines) {
+      if (!line.startsWith("#")) {
+        introPara = line;
+        break;
+      }
     }
   }
 
@@ -143,21 +188,23 @@ export function scoreContent(content, filepath, config) {
     structBreakdown.push("Answer-First: No intro paragraph found (+0 pts)");
   }
 
-  if (hasMdTable(tokens) || textContent.toLowerCase().includes("<table>")) {
+  if (hasMdTable(tokens) || textContent.toLowerCase().includes("<table>") || (htmlStructure && htmlStructure.tableCount > 0)) {
     structScore += 4;
     structBreakdown.push("Tables: Structured data tables present (+4 pts)");
   } else {
     structBreakdown.push("Tables: No tables found (+0 pts)");
   }
 
-  if (hasMdList(tokens)) {
+  if (hasMdList(tokens) || (htmlStructure && htmlStructure.listCount > 0)) {
     structScore += 3;
     structBreakdown.push("Lists: Bulleted or numbered lists present (+3 pts)");
   } else {
     structBreakdown.push("Lists: No lists found (+0 pts)");
   }
 
-  if (/^##+\s+\w+/m.test(textContent) || /<h[234]>/i.test(textContent)) {
+  const mdHasHeaders = /^##+\s+\w+/m.test(textContent);
+  const htmlHasHeaders = htmlStructure && htmlStructure.h2h3Count > 0;
+  if (mdHasHeaders || htmlHasHeaders) {
     structScore += 3;
     structBreakdown.push("Headers: Clean H2/H3 hierarchy found (+3 pts)");
   } else {
@@ -165,9 +212,9 @@ export function scoreContent(content, filepath, config) {
   }
 
   // HTML semantic tag audits
-  if (filepath.endsWith(".html") || textContent.toLowerCase().includes("<html")) {
-    const $html = cheerio.load(content);
-    const htmlLower = textContent.toLowerCase();
+  if (isHtml) {
+    const $html = htmlCheerio || cheerio.load(content);
+    const htmlLower = content.toLowerCase();
     const semanticTags = ["article", "main", "header", "footer", "nav", "section"];
     const foundTags = semanticTags.filter((tag) => $html(tag).length > 0);
     if (foundTags.length >= 3) {
@@ -246,9 +293,17 @@ export function scoreContent(content, filepath, config) {
 
   // 4. Citation & Authority (Max 20 pts)
   let citationScore = 0;
-  const mdLinkCount = countMdLinks(tokens);
-  const htmlLinks = textContent.match(/href=["'](https?:\/\/[^"']+)["']/g) || [];
-  const linkCount = mdLinkCount + htmlLinks.length;
+  let linkCount;
+  if (isHtml && htmlCheerio) {
+    // ── HTML: contar links vía cheerio ──
+    const $ = htmlCheerio;
+    linkCount = $('a[href^="http"], a[href^="https://"]').length;
+  } else {
+    // ── Markdown: contar links vía marked AST + regex en HTML embebido ──
+    const mdLinkCount = countMdLinks(tokens);
+    const htmlLinks = textContent.match(/href=["'](https?:\/\/[^"']+)["']/g) || [];
+    linkCount = mdLinkCount + htmlLinks.length;
+  }
 
   const hasSourcesHeader = ["sources", "references", "citations", "bibliography"].some((keyword) =>
     textContent.toLowerCase().includes(keyword)
@@ -367,12 +422,15 @@ export function scoreContent(content, filepath, config) {
   const totalScore = structScore + statsScore + quotesScore + citationScore + clarityScore;
 
   // ── Structured findings (plan 021, additive — scores and recs untouched) ──
+  const hasTable = hasMdTable(tokens) || textContent.toLowerCase().includes("<table>") || (htmlStructure && htmlStructure.tableCount > 0);
+  const hasList = hasMdList(tokens) || (htmlStructure && htmlStructure.listCount > 0);
+  const hasHeaders = /^##+\s+\w+/m.test(textContent) || (htmlStructure && htmlStructure.h2h3Count > 0);
   const findings = mapLegacyToFindings({
     introWordCount,
     introHasDefinition,
-    hasTable: hasMdTable(tokens) || textContent.toLowerCase().includes("<table>"),
-    hasList: hasMdList(tokens),
-    hasHeaders: /^##+\s+\w+/m.test(textContent) || /<h[234]>/i.test(textContent),
+    hasTable,
+    hasList,
+    hasHeaders,
     hasSemanticHtml: foundSemanticHtml,
     hasDynamicRendering,
     totalStatCount,
@@ -390,7 +448,11 @@ export function scoreContent(content, filepath, config) {
     recs.push(
       "Format the opening paragraph to be a self-contained definition/summary of 40-90 words (Answer-First)."
     );
-    recs.push("Use markdown tables, headers, and bulleted lists to break up dense blocks of text.");
+    recs.push(
+      isHtml
+        ? "Use HTML structure elements (tables, headings, lists) to break up dense blocks of text."
+        : "Use markdown tables, headers, and bulleted lists to break up dense blocks of text."
+    );
   }
   if (statsScore < 20) {
     recs.push(

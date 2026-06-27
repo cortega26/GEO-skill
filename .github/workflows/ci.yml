@@ -60,6 +60,9 @@ jobs:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: node scripts/check-changelog.js
 
+      - name: Dogfood — audit own documentation
+        run: node bin/cli.js audit docs/ --recursive --threshold 50
+
       - name: Security audit (advisory only)
         run: npm audit --audit-level=high || true
         continue-on-error: true

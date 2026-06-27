@@ -14,7 +14,7 @@
 
 import { marked } from "marked";
 import * as cheerio from "cheerio";
-import { preprocessContent } from "./text.js";
+import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Observation data types (plain objects, not classes, for portability)
@@ -229,8 +229,25 @@ function getParagraphLengths(text) {
  * @param {any[]} tokens
  * @returns {HeadingObservation}
  */
-function observeHeadingHierarchy(tokens) {
-  const headings = extractHeadings(tokens);
+function observeHeadingHierarchy(tokens, htmlMeta = null) {
+  let headings;
+
+  if (htmlMeta && htmlMeta.cheerio) {
+    // ── HTML: extraer headings del DOM ──
+    const $ = htmlMeta.cheerio;
+    const body = $("body").length ? $("body") : $.root();
+    headings = [];
+    for (let i = 1; i <= 6; i++) {
+      body.find(`h${i}`).each((_, el) => {
+        const text = $(el).text().replace(/\s+/g, " ").trim();
+        if (text) headings.push({ level: i, text, index: headings.length });
+      });
+    }
+  } else {
+    // ── Markdown: extraer headings del AST ──
+    headings = extractHeadings(tokens);
+  }
+
   const issues = [];
 
   if (headings.length === 0) {
@@ -292,9 +309,53 @@ function observeHeadingHierarchy(tokens) {
  * @param {number} [opts.minWordsPerSection=10]
  * @returns {SectionObservation}
  */
-function observeSectionSelfContainment(tokens, opts = {}) {
+function observeSectionSelfContainment(tokens, opts = {}, htmlMeta = null) {
   const minWords = opts.minWordsPerSection ?? 10;
-  const sections = extractSections(tokens);
+  let sections;
+
+  if (htmlMeta && htmlMeta.cheerio) {
+    // ── HTML: extraer secciones del DOM ──
+    const $ = htmlMeta.cheerio;
+    const body = $("body").length ? $("body") : $.root();
+    const rawSections = [];
+    let currentHeader = "(document start)";
+    let currentLevel = 0;
+    let currentWords = [];
+
+    // Recorrer elementos del body en orden de documento
+    body.children().each((_, el) => {
+      const tag = el.tagName?.toLowerCase();
+      if (tag && /^h[1-6]$/.test(tag)) {
+        // Guardar sección anterior
+        rawSections.push({
+          header: currentHeader,
+          level: currentLevel,
+          wordCount: currentWords.length,
+          isEmpty: currentWords.length === 0,
+        });
+        currentHeader = $(el).text().replace(/\s+/g, " ").trim();
+        currentLevel = parseInt(tag[1]);
+        currentWords = [];
+      } else {
+        const text = $(el).text().replace(/\s+/g, " ").trim();
+        if (text) {
+          const words = text.match(/\b\w+\b/g) || [];
+          currentWords.push(...words);
+        }
+      }
+    });
+    // Última sección
+    rawSections.push({
+      header: currentHeader,
+      level: currentLevel,
+      wordCount: currentWords.length,
+      isEmpty: currentWords.length === 0,
+    });
+    sections = rawSections;
+  } else {
+    // ── Markdown: extraer secciones del AST ──
+    sections = extractSections(tokens);
+  }
 
   if (sections.length === 0) {
     return {
@@ -394,17 +455,43 @@ function observeParagraphDistribution(textContent, opts = {}) {
  * @param {any[]} tokens
  * @returns {AnswerFirstObservation}
  */
-function observeAnswerFirst(textContent, _tokens) {
+function observeAnswerFirst(textContent, _tokens, htmlMeta = null) {
   const lines = textContent
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
   let introPara = "";
-  for (const line of lines) {
-    if (!line.startsWith("#")) {
-      introPara = line;
-      break;
+
+  if (htmlMeta && htmlMeta.cheerio) {
+    // ── HTML: buscar el primer <p> después del <h1> ──
+    const $ = htmlMeta.cheerio;
+    const h1 = $("h1").first();
+    let firstP = null;
+    if (h1.length) {
+      firstP = h1.nextAll("p").first();
+    }
+    if (!firstP || !firstP.length) {
+      firstP = $("p").first();
+    }
+    if (firstP && firstP.length) {
+      introPara = firstP.text().replace(/\s+/g, " ").trim();
+    } else {
+      // Fallback: primera línea no-heading con longitud suficiente
+      for (const line of lines) {
+        if (line.length > 20 && !/^[A-Z][a-z]+(\s+[A-Z][a-z]+)*\s*[\|\-—–]/.test(line)) {
+          introPara = line;
+          break;
+        }
+      }
+    }
+  } else {
+    // ── Markdown: buscar la primera línea que no sea heading ──
+    for (const line of lines) {
+      if (!line.startsWith("#")) {
+        introPara = line;
+        break;
+      }
     }
   }
 
@@ -463,7 +550,8 @@ function observeAnswerFirst(textContent, _tokens) {
  * @param {any[]} tokens
  * @returns {AttributionObservation}
  */
-function observeAttributionProximity(textContent, _tokens) {
+function observeAttributionProximity(textContent, _tokens, htmlMeta = null) {
+  // ── Para HTML, el textContent ya es texto visible limpio (sin atributos HTML).
   // Find statistics (numbers with % or $) and check if a source reference
   // appears within 150 characters after them.
   const statMatches =
@@ -699,25 +787,40 @@ function observeSemanticHtml(rawContent, filepath) {
  * @param {any[]} tokens
  * @returns {LinkQualityObservation}
  */
-function observeLinkQuality(textContent, tokens) {
+function observeLinkQuality(textContent, tokens, htmlMeta = null) {
   let externalLinks = 0;
   let internalLinks = 0;
 
-  walkTokens(tokens, (token) => {
-    if (token.type === "link" && token.href) {
-      if (/^https?:\/\//.test(token.href)) {
+  if (htmlMeta && htmlMeta.cheerio) {
+    // ── HTML: contar links vía cheerio ──
+    const $ = htmlMeta.cheerio;
+    const body = $("body").length ? $("body") : $.root();
+    body.find("a[href]").each((_, el) => {
+      const href = $(el).attr("href") || "";
+      if (/^https?:\/\//.test(href)) {
         externalLinks++;
-      } else {
+      } else if (!href.startsWith("#") && !href.startsWith("javascript:")) {
         internalLinks++;
       }
-    } else if (token.type === "image" && token.href && /^https?:\/\//.test(token.href)) {
-      externalLinks++;
-    }
-  });
+    });
+  } else {
+    // ── Markdown: contar links vía marked AST ──
+    walkTokens(tokens, (token) => {
+      if (token.type === "link" && token.href) {
+        if (/^https?:\/\//.test(token.href)) {
+          externalLinks++;
+        } else {
+          internalLinks++;
+        }
+      } else if (token.type === "image" && token.href && /^https?:\/\//.test(token.href)) {
+        externalLinks++;
+      }
+    });
 
-  // Also check raw HTML links
-  const htmlLinks = textContent.match(/href=["'](https?:\/\/[^"']+)["']/g) || [];
-  externalLinks += htmlLinks.length;
+    // También revisar links HTML embebidos en el texto
+    const htmlLinks = textContent.match(/href=["'](https?:\/\/[^"']+)["']/g) || [];
+    externalLinks += htmlLinks.length;
+  }
 
   const hasSourcesSection = [
     "sources",
@@ -795,17 +898,32 @@ function observeLinkQuality(textContent, tokens) {
  * @returns {ContentObservations}
  */
 export function observeContent(rawContent, filepath = "", opts = {}) {
-  const textContent = preprocessContent(rawContent);
-  const tokens = marked.lexer(textContent);
+  const isHtml = isHtmlContent(rawContent) || filepath.endsWith(".html");
+  let textContent, tokens, htmlMeta;
 
-  const headingHierarchy = observeHeadingHierarchy(tokens);
-  const sectionSelfContainment = observeSectionSelfContainment(tokens, opts);
+  if (isHtml) {
+    // ── HTML path: extraer texto visible y estructura vía cheerio ──
+    const $ = cheerio.load(rawContent);
+    const structure = extractHtmlVisibleText(rawContent);
+    textContent = structure.textContent;
+    // marked se usa solo para inline formatting; la estructura viene de cheerio
+    tokens = marked.lexer(textContent);
+    htmlMeta = { cheerio: $, structure };
+  } else {
+    // ── Markdown path ──
+    textContent = preprocessContent(rawContent);
+    tokens = marked.lexer(textContent);
+    htmlMeta = null;
+  }
+
+  const headingHierarchy = observeHeadingHierarchy(tokens, htmlMeta);
+  const sectionSelfContainment = observeSectionSelfContainment(tokens, opts, htmlMeta);
   const paragraphDistribution = observeParagraphDistribution(textContent, opts);
-  const answerFirst = observeAnswerFirst(textContent, tokens);
-  const attributionProximity = observeAttributionProximity(textContent, tokens);
+  const answerFirst = observeAnswerFirst(textContent, tokens, htmlMeta);
+  const attributionProximity = observeAttributionProximity(textContent, tokens, htmlMeta);
   const contentFreshness = observeContentFreshness(textContent);
   const semanticHtml = observeSemanticHtml(rawContent, filepath);
-  const linkQuality = observeLinkQuality(textContent, tokens);
+  const linkQuality = observeLinkQuality(textContent, tokens, htmlMeta);
 
   /** @type {ContentObservations} */
   const observations = {
@@ -834,8 +952,18 @@ export function observeContent(rawContent, filepath = "", opts = {}) {
  * @returns {{ observations: ContentObservations, tokens: any, textContent: string }}
  */
 export function observeAndParse(rawContent, filepath = "", opts = {}) {
-  const textContent = preprocessContent(rawContent);
-  const tokens = marked.lexer(textContent);
+  const isHtml = isHtmlContent(rawContent) || filepath.endsWith(".html");
+  let textContent, tokens;
+
+  if (isHtml) {
+    const structure = extractHtmlVisibleText(rawContent);
+    textContent = structure.textContent;
+    tokens = marked.lexer(textContent);
+  } else {
+    textContent = preprocessContent(rawContent);
+    tokens = marked.lexer(textContent);
+  }
+
   const observations = observeContent(rawContent, filepath, opts);
   return { observations, tokens, textContent };
 }

@@ -33,6 +33,8 @@ import {
   loadConfig,
   MODEL_VERSION,
   preprocessContent,
+  isHtmlContent,
+  extractHtmlVisibleText,
   readEngagementState,
   recordSuccessfulFreeInjection,
   remindersAreEnabled,
@@ -194,6 +196,62 @@ Final text.
   assert.ok(result.includes("Some text"));
   assert.ok(result.includes("More text"));
   assert.ok(result.includes("Final text"));
+});
+
+test("isHtmlContent detects HTML by doctype, html tag, or structural elements", () => {
+  assert.ok(isHtmlContent("<!DOCTYPE html><html><head></head><body></body></html>"));
+  assert.ok(isHtmlContent('<html lang="en"><head></head><body></body></html>'));
+  assert.ok(isHtmlContent("<div><p>Hello</p></div>"));
+  assert.ok(isHtmlContent("<article><h1>Title</h1><p>Body</p></article>"));
+  assert.ok(!isHtmlContent("# Heading\n\nThis is **markdown**."));
+  assert.ok(!isHtmlContent("Plain text without any HTML tags."));
+  assert.ok(!isHtmlContent("console.log('hello'); // just code"));
+});
+
+test("extractHtmlVisibleText extracts clean text and structure from minified HTML", () => {
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Test</title><style>body{color:red}</style><script>console.log('x')</script></head><body><main><h1>Page Title</h1><p>First paragraph with some content here.</p><h2>Section A</h2><p>Section paragraph text.</p><ul><li>Item one</li><li>Item two</li></ul><h2>Section B</h2><table><tr><td>Cell 1</td><td>Cell 2</td></tr></table><p>Final paragraph.</p></main></body></html>`;
+  const result = extractHtmlVisibleText(html);
+
+  // Texto visible: sin CSS, sin JS, sin meta
+  assert.ok(!result.textContent.includes("color"), "no debe contener CSS");
+  assert.ok(!result.textContent.includes("console"), "no debe contener JS");
+  assert.ok(!result.textContent.includes("UTF-8"), "no debe contener meta charset");
+  assert.ok(result.textContent.includes("Page Title"), "debe contener el h1");
+  assert.ok(result.textContent.includes("First paragraph"), "debe contener el primer párrafo");
+  assert.ok(result.textContent.includes("Section A"), "debe contener h2");
+  assert.ok(result.textContent.includes("Item one"), "debe contener items de lista");
+  assert.ok(result.textContent.includes("Cell 1"), "debe contener celdas de tabla");
+  assert.ok(result.textContent.includes("Final paragraph"), "debe contener el último párrafo");
+
+  // Estructura detectada
+  assert.ok(result.headingCount >= 3, `debe detectar al menos 3 headings (detectó ${result.headingCount})`);
+  assert.ok(result.h2h3Count >= 2, `debe detectar al menos 2 h2/h3 (detectó ${result.h2h3Count})`);
+  assert.equal(result.listCount, 1, "debe detectar 1 lista");
+  assert.equal(result.tableCount, 1, "debe detectar 1 tabla");
+});
+
+test("extractHtmlVisibleText handles minified HTML (single-line)", () => {
+  // Simula la salida minificada de Astro: todo en una línea
+  const minified = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="description" content="Scheduled, reproducible Python automation: ETL pipelines, scrapers, and reporting flows built to keep running."><link rel="canonical" href="https://tooltician.com/en/services/python-automation/"><style>.card{display:flex;width:1200px;height:630px}</style></head><body><main><h1>Python Automation</h1><p>Scheduled, reproducible Python automation that runs $290/month.</p><h2>Service Details</h2><ul><li>ETL pipeline design</li><li>Web scraping</li></ul><h3>Pricing</h3><table><tr><td>Basic</td><td>$290</td></tr></table></main></body></html>';
+  const result = extractHtmlVisibleText(minified);
+
+  // No debe contener atributos HTML como "quotes"
+  assert.ok(!result.textContent.includes('Scheduled, reproducible Python automation: ETL pipelines'), "no debe contener texto del meta description");
+
+  // No debe contener CSS
+  assert.ok(!result.textContent.includes("1200px"), "no debe contener dimensiones CSS");
+  assert.ok(!result.textContent.includes("display:flex"), "no debe contener reglas CSS");
+
+  // Debe contener texto visible
+  assert.ok(result.textContent.includes("Python Automation"), "debe contener el h1");
+  assert.ok(result.textContent.includes("$290"), "debe contener texto del cuerpo");
+  assert.ok(result.textContent.includes("ETL pipeline design"), "debe contener items de lista");
+  assert.ok(result.textContent.includes("Basic"), "debe contener texto de tabla");
+
+  // Estructura correcta
+  assert.equal(result.h2h3Count, 2, "debe detectar h2 + h3");
+  assert.equal(result.listCount, 1, "debe detectar 1 lista");
+  assert.equal(result.tableCount, 1, "debe detectar 1 tabla");
 });
 
 test("checkRobots detects blocked AI agents", () => {

@@ -103,6 +103,28 @@ declare module "geo-opt" {
   export function preprocessContent(content: string): string;
   export function cleanMarkdownToPlainText(mdText: string): string;
 
+  /**
+   * Detecta si el contenido es HTML (en lugar de Markdown).
+   */
+  export function isHtmlContent(content: string): boolean;
+
+  /**
+   * Resultado de extraer texto visible y metadatos estructurales de HTML.
+   */
+  export interface HtmlVisibleText {
+    textContent: string;
+    headingCount: number;
+    h2h3Count: number;
+    listCount: number;
+    tableCount: number;
+  }
+
+  /**
+   * Extrae texto visible de HTML usando cheerio, normalizando whitespace
+   * y separando elementos de bloque con saltos de párrafo.
+   */
+  export function extractHtmlVisibleText(rawHtml: string): HtmlVisibleText;
+
   export interface Section {
     header: string;
     body: string;

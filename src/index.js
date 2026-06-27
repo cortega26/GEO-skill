@@ -20,6 +20,8 @@ export {
   preprocessContent,
   cleanMarkdownToPlainText,
   extractSections,
+  isHtmlContent,
+  extractHtmlVisibleText,
 } from "./text.js";
 export { scoreContent, auditFile } from "./scoring.js";
 export {

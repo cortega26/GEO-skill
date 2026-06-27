@@ -11,6 +11,73 @@ export function truncateDescription(description, maxLen = 150) {
   return description.length > maxLen ? `${description.slice(0, maxLen - 3)}...` : description;
 }
 
+/**
+ * Detecta si el contenido es HTML (en lugar de Markdown).
+ * @param {string} content
+ * @returns {boolean}
+ */
+export function isHtmlContent(content) {
+  return (
+    /^\s*<!DOCTYPE\s/i.test(content) ||
+    /<html[\s>]/i.test(content) ||
+    /<(?:head|body|meta|link|script|style|div|span|p|a|img|table|ul|ol|li|h[1-6]|header|footer|main|nav|section|article)[\s>]/i.test(
+      content
+    )
+  );
+}
+
+/**
+ * Extrae texto visible de HTML usando cheerio, normalizando whitespace
+ * y separando elementos de bloque con saltos de párrafo.
+ *
+ * También retorna metadatos estructurales (headings, listas, tablas)
+ * para que el scoring no dependa de marked AST cuando el contenido es HTML.
+ *
+ * @param {string} rawHtml — HTML crudo (minificado o no)
+ * @returns {{ textContent: string, headingCount: number, h2h3Count: number, listCount: number, tableCount: number }}
+ */
+export function extractHtmlVisibleText(rawHtml) {
+  const $ = cheerio.load(rawHtml);
+
+  // Remover elementos no-visibles antes de extraer texto
+  $("script, style, noscript, meta, link, head").remove();
+
+  // Contar estructura con cheerio (antes de aplanar el texto)
+  const headingCount = $("h1, h2, h3, h4, h5, h6").length;
+  const h2h3Count = $("h2, h3").length;
+  const listCount = $("ul, ol").length;
+  const tableCount = $("table").length;
+
+  // Obtener HTML del body (o del root si no hay body)
+  const bodyEl = $("body").length ? $("body") : $.root();
+  let html = bodyEl.html() || "";
+
+  // Insertar saltos de párrafo en cierres de elementos de bloque
+  // para que getParagraphLengths() y observeAnswerFirst() funcionen correctamente
+  html = html.replace(
+    /<\/(?:p|div|section|article|header|footer|main|nav|aside|h[1-6]|li|blockquote|pre|figure|figcaption|table|tr|form|fieldset|details|summary|address|ol|ul|dl|dt|dd)\s*>/gi,
+    "\n\n"
+  );
+  html = html.replace(/<br\s*\/?>/gi, "\n");
+
+  // Extraer texto plano
+  const textContent = cheerio
+    .load(html)
+    .text()
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .trim();
+
+  return {
+    textContent,
+    headingCount,
+    h2h3Count,
+    listCount,
+    tableCount,
+  };
+}
+
 export function calculateReadability(text) {
   const sentences = text
     .split(/[.!?]+/)
