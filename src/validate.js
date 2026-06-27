@@ -12,16 +12,14 @@ const REQUIRED_FIELDS = {
 
 export function validateSchemaFile(filepath) {
   if (!fs.existsSync(filepath)) {
-    console.error(`Error: File ${filepath} not found.`);
-    process.exit(1);
+    throw new Error(`File ${filepath} not found.`);
   }
 
   let content;
   try {
     content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
   } catch (e) {
-    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-    process.exit(1);
+    throw new Error(`Failed to read file ${filepath}: ${e.message}`, { cause: e });
   }
 
   // Extract JSON-LD from markdown code fences or HTML script tags

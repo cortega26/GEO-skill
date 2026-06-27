@@ -24,6 +24,8 @@ export {
   extractHtmlVisibleText,
 } from "./text.js";
 export { scoreContent, auditFile } from "./scoring.js";
+export { auditContent } from "./engine.js";
+export { renderV1Report, renderV2Report, renderV1Summary, renderV2Summary } from "./renderer.js";
 export {
   REPORT_VERSION,
   MODEL_VERSION,
@@ -58,6 +60,8 @@ export {
   assertWritableTargetInsideCwd,
   generateSchemaData,
   injectSchema,
+  validateWritableTargetInsideCwd,
+  validateNewFileParentInsideCwd,
 } from "./schema.js";
 export {
   AI_CRAWLER_AGENTS,

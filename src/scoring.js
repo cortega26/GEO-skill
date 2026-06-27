@@ -188,7 +188,11 @@ export function scoreContent(content, filepath, config) {
     structBreakdown.push("Answer-First: No intro paragraph found (+0 pts)");
   }
 
-  if (hasMdTable(tokens) || textContent.toLowerCase().includes("<table>") || (htmlStructure && htmlStructure.tableCount > 0)) {
+  if (
+    hasMdTable(tokens) ||
+    textContent.toLowerCase().includes("<table>") ||
+    (htmlStructure && htmlStructure.tableCount > 0)
+  ) {
     structScore += 4;
     structBreakdown.push("Tables: Structured data tables present (+4 pts)");
   } else {
@@ -422,9 +426,13 @@ export function scoreContent(content, filepath, config) {
   const totalScore = structScore + statsScore + quotesScore + citationScore + clarityScore;
 
   // ── Structured findings (plan 021, additive — scores and recs untouched) ──
-  const hasTable = hasMdTable(tokens) || textContent.toLowerCase().includes("<table>") || (htmlStructure && htmlStructure.tableCount > 0);
-  const hasList = hasMdList(tokens) || (htmlStructure && htmlStructure.listCount > 0);
-  const hasHeaders = /^##+\s+\w+/m.test(textContent) || (htmlStructure && htmlStructure.h2h3Count > 0);
+  const hasTable =
+    hasMdTable(tokens) ||
+    textContent.toLowerCase().includes("<table>") ||
+    !!(htmlStructure && htmlStructure.tableCount > 0);
+  const hasList = hasMdList(tokens) || !!(htmlStructure && htmlStructure.listCount > 0);
+  const hasHeaders =
+    /^##+\s+\w+/m.test(textContent) || !!(htmlStructure && htmlStructure.h2h3Count > 0);
   const findings = mapLegacyToFindings({
     introWordCount,
     introHasDefinition,
@@ -499,18 +507,14 @@ export function scoreContent(content, filepath, config) {
 
 export function auditFile(filepath, config, outputFormat = "text", explain = false) {
   if (!fs.existsSync(filepath)) {
-    console.error(`Error: File ${filepath} not found.`);
-    process.exit(1);
-    return;
+    throw new Error(`File ${filepath} not found.`);
   }
 
   let content = "";
   try {
     content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
   } catch (e) {
-    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-    process.exit(1);
-    return;
+    throw new Error(`Failed to read file ${filepath}: ${e.message}`, { cause: e });
   }
 
   const { score: totalScore, report } = scoreContent(content, filepath, config);

@@ -59,9 +59,7 @@ export function loadConfig(configPath = null) {
   const searchPaths = [];
   if (configPath) {
     if (!fs.existsSync(configPath)) {
-      console.error(`Error: Specified config file ${configPath} not found.`);
-      process.exit(1);
-      return;
+      throw new Error(`Specified config file ${configPath} not found.`);
     }
     searchPaths.push(configPath);
   } else {
@@ -83,9 +81,7 @@ export function loadConfig(configPath = null) {
             .join("\n");
           const message = `Invalid config at ${p}:\n${issues}`;
           if (configPath) {
-            console.error(`Error: ${message}`);
-            process.exit(1);
-            return;
+            throw new Error(message);
           }
           console.warn(`Warning: ${message}`);
           return { config: {}, configPath: null };
@@ -94,9 +90,7 @@ export function loadConfig(configPath = null) {
       } catch (e) {
         const message = `Failed to parse config at ${p}: ${e.message}`;
         if (configPath) {
-          console.error(`Error: ${message}`);
-          process.exit(1);
-          return;
+          throw new Error(message, { cause: e });
         }
         console.warn(`Warning: ${message}`);
       }

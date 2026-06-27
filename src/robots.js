@@ -329,18 +329,14 @@ function renderRobotsAudit(result) {
 
 export function checkRobots(robotsPath, options = {}) {
   if (!fs.existsSync(robotsPath)) {
-    console.error(`Error: robots.txt not found at ${robotsPath}`);
-    process.exit(1);
-    return;
+    throw new Error(`robots.txt not found at ${robotsPath}`);
   }
 
   let content = "";
   try {
     content = fs.readFileSync(robotsPath, { encoding: "utf8", flag: "r" });
   } catch (e) {
-    console.error(`Error: Failed to read robots.txt: ${e.message}`);
-    process.exit(1);
-    return;
+    throw new Error(`Failed to read robots.txt: ${e.message}`, { cause: e });
   }
 
   const result = auditRobots(content, options);

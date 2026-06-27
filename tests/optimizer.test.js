@@ -224,7 +224,10 @@ test("extractHtmlVisibleText extracts clean text and structure from minified HTM
   assert.ok(result.textContent.includes("Final paragraph"), "debe contener el último párrafo");
 
   // Estructura detectada
-  assert.ok(result.headingCount >= 3, `debe detectar al menos 3 headings (detectó ${result.headingCount})`);
+  assert.ok(
+    result.headingCount >= 3,
+    `debe detectar al menos 3 headings (detectó ${result.headingCount})`
+  );
   assert.ok(result.h2h3Count >= 2, `debe detectar al menos 2 h2/h3 (detectó ${result.h2h3Count})`);
   assert.equal(result.listCount, 1, "debe detectar 1 lista");
   assert.equal(result.tableCount, 1, "debe detectar 1 tabla");
@@ -232,11 +235,15 @@ test("extractHtmlVisibleText extracts clean text and structure from minified HTM
 
 test("extractHtmlVisibleText handles minified HTML (single-line)", () => {
   // Simula la salida minificada de Astro: todo en una línea
-  const minified = '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="description" content="Scheduled, reproducible Python automation: ETL pipelines, scrapers, and reporting flows built to keep running."><link rel="canonical" href="https://tooltician.com/en/services/python-automation/"><style>.card{display:flex;width:1200px;height:630px}</style></head><body><main><h1>Python Automation</h1><p>Scheduled, reproducible Python automation that runs $290/month.</p><h2>Service Details</h2><ul><li>ETL pipeline design</li><li>Web scraping</li></ul><h3>Pricing</h3><table><tr><td>Basic</td><td>$290</td></tr></table></main></body></html>';
+  const minified =
+    '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="description" content="Scheduled, reproducible Python automation: ETL pipelines, scrapers, and reporting flows built to keep running."><link rel="canonical" href="https://tooltician.com/en/services/python-automation/"><style>.card{display:flex;width:1200px;height:630px}</style></head><body><main><h1>Python Automation</h1><p>Scheduled, reproducible Python automation that runs $290/month.</p><h2>Service Details</h2><ul><li>ETL pipeline design</li><li>Web scraping</li></ul><h3>Pricing</h3><table><tr><td>Basic</td><td>$290</td></tr></table></main></body></html>';
   const result = extractHtmlVisibleText(minified);
 
   // No debe contener atributos HTML como "quotes"
-  assert.ok(!result.textContent.includes('Scheduled, reproducible Python automation: ETL pipelines'), "no debe contener texto del meta description");
+  assert.ok(
+    !result.textContent.includes("Scheduled, reproducible Python automation: ETL pipelines"),
+    "no debe contener texto del meta description"
+  );
 
   // No debe contener CSS
   assert.ok(!result.textContent.includes("1200px"), "no debe contener dimensiones CSS");
@@ -382,16 +389,10 @@ Short body text without much optimization.
   }
 });
 
-test("auditFile exits with error on missing file", () => {
-  const exitMock = mock.method(process, "exit", () => {});
-  const errorMock = mock.method(console, "error", () => {});
-
-  try {
+test("auditFile throws error on missing file", () => {
+  assert.throws(() => {
     auditFile("/nonexistent/path/file.md", config, "text");
-    assert.ok(exitMock.mock.calls.length > 0);
-  } finally {
-    mock.reset();
-  }
+  }, /not found/);
 });
 
 test("generateSchemaData generates valid FAQPage schema with filters", () => {

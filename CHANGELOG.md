@@ -18,6 +18,14 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Python syntax gate in `npm run lint`: `python3 -m py_compile` now runs
   against both Python source files as part of the standard lint step.
 
+### Fixed
+
+- Coerced `hasTable`, `hasList`, and `hasHeaders` boolean findings to avoid `null` outputs for Markdown documents when HTML structure is absent.
+- Preserved caught errors in exceptions by attaching the original `cause` inside catch blocks.
+- Fixed a broken CLI import of `scoreContentV2` and removed unused imports in `bin/cli.js`.
+- Fixed JavaScript unit tests for `auditFile` and `validateSchemaFile` to assert exception throwing instead of `process.exit(1)`.
+- Prefixed unused `htmlMeta` parameter with `_` in `observeAttributionProximity` in `src/observations.js` to resolve ESLint `no-unused-vars` error.
+
 ### Changed
 
 - Minimum supported Node.js raised from 20 to **22**. Node.js 20 reached EOL

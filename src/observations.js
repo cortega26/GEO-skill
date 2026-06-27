@@ -550,7 +550,7 @@ function observeAnswerFirst(textContent, _tokens, htmlMeta = null) {
  * @param {any[]} tokens
  * @returns {AttributionObservation}
  */
-function observeAttributionProximity(textContent, _tokens, htmlMeta = null) {
+function observeAttributionProximity(textContent, _tokens, _htmlMeta = null) {
   // ── Para HTML, el textContent ya es texto visible limpio (sin atributos HTML).
   // Find statistics (numbers with % or $) and check if a source reference
   // appears within 150 characters after them.

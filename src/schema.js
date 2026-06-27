@@ -71,34 +71,44 @@ export function validateWritableTargetInsideCwd(filepath) {
 export function assertWritableTargetInsideCwd(filepath) {
   const result = validateWritableTargetInsideCwd(filepath);
   if (!result.valid) {
-    console.error(`Error: ${result.error}`);
-    process.exit(1);
-    return;
+    throw new Error(result.error);
   }
   return { targetRealPath: result.targetRealPath, cwdRealPath: result.cwdRealPath };
 }
 
-export function assertNewFileParentInsideCwd(filepath) {
+/**
+ * Validate that a new file's parent directory is inside the CWD.
+ * Batch-safe: returns a result object instead of calling process.exit.
+ *
+ * @param {string} filepath
+ * @returns {{ valid: true, parentRealPath: string, cwdRealPath: string } | { valid: false, error: string }}
+ */
+export function validateNewFileParentInsideCwd(filepath) {
   let parentRealPath;
   let cwdRealPath;
   try {
     parentRealPath = fs.realpathSync(path.dirname(filepath));
     cwdRealPath = fs.realpathSync(process.cwd());
   } catch (e) {
-    console.error(`Error: Failed to resolve real path for ${filepath}: ${e.message}`);
-    process.exit(1);
-    return;
+    return { valid: false, error: `Failed to resolve real path for ${filepath}: ${e.message}` };
   }
 
   if (!isInsideDirectory(parentRealPath, cwdRealPath)) {
-    console.error(
-      `Error: Security restriction — output path ${filepath} resolves outside the current working directory.`
-    );
-    process.exit(1);
-    return;
+    return {
+      valid: false,
+      error: `Security restriction — output path ${filepath} resolves outside the current working directory.`,
+    };
   }
 
-  return { parentRealPath, cwdRealPath };
+  return { valid: true, parentRealPath, cwdRealPath };
+}
+
+export function assertNewFileParentInsideCwd(filepath) {
+  const result = validateNewFileParentInsideCwd(filepath);
+  if (!result.valid) {
+    throw new Error(result.error);
+  }
+  return { parentRealPath: result.parentRealPath, cwdRealPath: result.cwdRealPath };
 }
 
 // _content is an optional pre-read file body. When provided, the file
@@ -106,27 +116,19 @@ export function assertNewFileParentInsideCwd(filepath) {
 // already read the file once to avoid double I/O.
 export function generateSchemaData(filepath, schemaType, config, _content = null) {
   if (!SUPPORTED_SCHEMA_TYPES.has(schemaType)) {
-    console.error(
-      `Error: Unsupported schema type "${schemaType}". Expected article, faq, or product.`
-    );
-    process.exit(1);
-    return;
+    throw new Error(`Unsupported schema type "${schemaType}". Expected article, faq, or product.`);
   }
 
   let content = _content;
   if (content === null) {
     if (!fs.existsSync(filepath)) {
-      console.error(`Error: File ${filepath} not found.`);
-      process.exit(1);
-      return;
+      throw new Error(`File ${filepath} not found.`);
     }
 
     try {
       content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
     } catch (e) {
-      console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-      process.exit(1);
-      return;
+      throw new Error(`Failed to read file ${filepath}: ${e.message}`, { cause: e });
     }
   }
 
@@ -363,30 +365,22 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
   if (noBranding) {
     const entitlementError = getNoBrandingError(config);
     if (entitlementError) {
-      console.error(`Error: ${entitlementError}`);
-      process.exit(1);
-      return;
+      throw new Error(entitlementError);
     }
   }
 
   if (!fs.existsSync(filepath)) {
-    console.error(`Error: File ${filepath} not found.`);
-    process.exit(1);
-    return;
+    throw new Error(`File ${filepath} not found.`);
   }
 
-  if (!assertWritableTargetInsideCwd(filepath)) {
-    return;
-  }
+  assertWritableTargetInsideCwd(filepath);
 
   // Read file once; pass to generateSchemaData to avoid double I/O.
   let content = "";
   try {
     content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
   } catch (e) {
-    console.error(`Error: Failed to read file ${filepath}: ${e.message}`);
-    process.exit(1);
-    return;
+    throw new Error(`Failed to read file ${filepath}: ${e.message}`, { cause: e });
   }
 
   const schema = generateSchemaData(filepath, schemaType, config, content);
@@ -424,8 +418,6 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
   try {
     fs.writeFileSync(filepath, modifiedContent, { encoding: "utf8" });
   } catch (e) {
-    console.error(`Error: Failed to write to file ${filepath}: ${e.message}`);
-    process.exit(1);
-    return;
+    throw new Error(`Failed to write to file ${filepath}: ${e.message}`, { cause: e });
   }
 }

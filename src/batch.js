@@ -1,5 +1,5 @@
 import fs from "fs";
-import { scoreContent } from "./scoring.js";
+import { auditContent } from "./engine.js";
 import {
   buildInjectedContent,
   generateSchemaData,
@@ -12,9 +12,10 @@ import {
  *
  * @param {string[]} files - absolute file paths
  * @param {object} config - parsed config object
+ * @param {"v1"|"v2"} [model="v1"] - scoring model
  * @returns {Array<{ file: string, status: string, score?: number, report?: object, error?: string }>}
  */
-export function auditFiles(files, config) {
+export function auditFiles(files, config, model = "v1") {
   const results = [];
   for (const filepath of files) {
     try {
@@ -29,7 +30,7 @@ export function auditFiles(files, config) {
         });
         continue;
       }
-      const { score, report } = scoreContent(content, filepath, config);
+      const { score, report } = auditContent(content, filepath, config, model);
       results.push({ file: filepath, status: "success", score, report });
     } catch (err) {
       results.push({ file: filepath, status: "error", error: err.message });

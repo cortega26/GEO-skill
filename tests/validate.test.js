@@ -16,26 +16,6 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-// Intercepta process.exit para que no termine el proceso de test.
-// validateSchemaFile llama process.exit en errores de I/O; plan 030 los aislará.
-function captureExit(fn) {
-  const captured = { code: undefined, called: false };
-  const origExit = process.exit;
-  process.exit = (code) => {
-    captured.code = code;
-    captured.called = true;
-    throw new Error(`process.exit(${code})`);
-  };
-  try {
-    fn();
-  } catch (e) {
-    if (!e.message.startsWith("process.exit")) throw e;
-  } finally {
-    process.exit = origExit;
-  }
-  return captured;
-}
-
 // Captura todo lo escrito a console.log / console.error durante fn().
 function captureConsole(fn) {
   const logs = [];
@@ -54,20 +34,10 @@ function captureConsole(fn) {
 }
 
 describe("validateSchemaFile — comportamiento de validación JSON-LD", () => {
-  it("sale con código 1 y mensaje de error cuando el archivo no existe", () => {
-    let exitResult;
-    const { errors } = captureConsole(() => {
-      exitResult = captureExit(() => {
-        validateSchemaFile(join(dir, "does-not-exist.md"));
-      });
-    });
-    assert.ok(exitResult.called, "process.exit debería haberse llamado");
-    assert.equal(exitResult.code, 1);
-    const errorOutput = errors.join(" ");
-    assert.ok(
-      errorOutput.includes("not found"),
-      `stderr debería indicar archivo no encontrado, obtuvo: ${errorOutput}`
-    );
+  it("lanza un error cuando el archivo no existe", () => {
+    assert.throws(() => {
+      validateSchemaFile(join(dir, "does-not-exist.md"));
+    }, /not found/);
   });
 
   it("informa que no hay bloques cuando el archivo no contiene JSON-LD", () => {
