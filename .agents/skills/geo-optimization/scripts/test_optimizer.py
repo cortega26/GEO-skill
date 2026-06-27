@@ -14,6 +14,7 @@ from geo_optimizer import (
     AI_CRAWLER_AGENTS,
     AI_CRAWLER_REGISTRY,
     calculate_readability,
+    create_finding,
     audit_file,
     audit_files,
     compute_summary,
@@ -152,6 +153,71 @@ class TestGeoOptimizer(unittest.TestCase):
             self.assertIn("acronyms", report["breakdown"]["clarity"]["details"][-1])
         finally:
             os.remove(temp_path)
+
+    def test_audit_json_finding_contract_matches_javascript(self):
+        fixture_path = os.path.abspath(
+            os.path.join(
+                os.path.dirname(__file__),
+                "..",
+                "..",
+                "..",
+                "..",
+                "tests",
+                "fixtures",
+                "sample.md",
+            )
+        )
+        audit_file(fixture_path, self.config, output_format="json")
+        python_report = json.loads(self.held_stdout.getvalue())
+
+        repo_root = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "..", "..")
+        )
+        javascript_result = subprocess.run(
+            [
+                "node",
+                os.path.join(repo_root, "bin", "cli.js"),
+                "audit",
+                fixture_path,
+                "--format",
+                "json",
+            ],
+            cwd=repo_root,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        javascript_report = json.loads(javascript_result.stdout)
+
+        self.assertEqual(python_report["total_score"], javascript_report["total_score"])
+        self.assertEqual(python_report["breakdown"], javascript_report["breakdown"])
+        self.assertEqual(python_report["recommendations"], javascript_report["recommendations"])
+        self.assertEqual(python_report["findings"], javascript_report["findings"])
+        self.assertEqual(python_report["reportVersion"], javascript_report["reportVersion"])
+        self.assertEqual(python_report["modelVersion"], javascript_report["modelVersion"])
+        self.assertRegex(
+            python_report["generatedAt"],
+            r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$",
+        )
+
+    def test_create_finding_rejects_invalid_evidence(self):
+        with self.assertRaisesRegex(ValueError, "Invalid evidenceLabel"):
+            create_finding(
+                "content.test",
+                "test",
+                "warn",
+                "Test finding",
+                "unsupported",
+            )
+        with self.assertRaisesRegex(ValueError, "Unknown source refs"):
+            create_finding(
+                "content.test",
+                "test",
+                "warn",
+                "Test finding",
+                "heuristic",
+                source_refs=["missing-source"],
+            )
 
     def test_cli_json_is_parseable_for_batches_and_threshold_failures(self):
         script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "geo_optimizer.py")
