@@ -48,6 +48,7 @@ export {
   detectProfile,
   resolveProfile,
 } from "./profiles.js";
+export { observeContent, observeAndParse } from "./observations.js";
 export {
   assertNewFileParentInsideCwd,
   assertWritableTargetInsideCwd,

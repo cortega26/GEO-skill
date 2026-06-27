@@ -170,6 +170,97 @@ declare module "geo-opt" {
     filepath?: string
   ): ResolvedProfile;
 
+  // ═══ Observations ═══
+  export type ObservationStatus = "pass" | "warn" | "fail";
+
+  export interface HeadingObservation {
+    kind: "heading_hierarchy";
+    status: ObservationStatus;
+    message: string;
+    issues: string[];
+  }
+
+  export interface SectionObservation {
+    kind: "section_self_containment";
+    status: ObservationStatus;
+    message: string;
+    details: Array<{ header: string; wordCount: number; isEmpty: boolean }>;
+  }
+
+  export interface ParagraphObservation {
+    kind: "paragraph_distribution";
+    status: ObservationStatus;
+    message: string;
+    stats: { min: number; max: number; median: number; longCount: number };
+  }
+
+  export interface AnswerFirstObservation {
+    kind: "answer_first";
+    status: ObservationStatus;
+    message: string;
+    wordCount: number;
+    hasDefinition: boolean;
+  }
+
+  export interface AttributionObservation {
+    kind: "attribution_proximity";
+    status: ObservationStatus;
+    message: string;
+    statsWithNearbySource: number;
+    statsWithoutNearbySource: number;
+    quotesWithAttribution: number;
+    quotesWithoutAttribution: number;
+  }
+
+  export interface DateObservation {
+    kind: "content_freshness";
+    status: ObservationStatus;
+    message: string;
+    publishedDate: string | null;
+    reviewedDate: string | null;
+  }
+
+  export interface SemanticHtmlObservation {
+    kind: "semantic_html";
+    status: ObservationStatus;
+    message: string;
+    foundTags: string[];
+    hasDynamicRendering: boolean;
+  }
+
+  export interface LinkQualityObservation {
+    kind: "link_quality";
+    status: ObservationStatus;
+    message: string;
+    externalLinkCount: number;
+    internalLinkCount: number;
+    hasSourcesSection: boolean;
+    hasExcessiveLinks: boolean;
+  }
+
+  export interface ContentObservations {
+    headingHierarchy: HeadingObservation;
+    sectionSelfContainment: SectionObservation;
+    paragraphDistribution: ParagraphObservation;
+    answerFirst: AnswerFirstObservation;
+    attributionProximity: AttributionObservation;
+    contentFreshness: DateObservation;
+    semanticHtml?: SemanticHtmlObservation;
+    linkQuality: LinkQualityObservation;
+  }
+
+  export function observeContent(
+    rawContent: string,
+    filepath?: string,
+    opts?: { minWordsPerSection?: number; maxLongParagraph?: number }
+  ): ContentObservations;
+
+  export function observeAndParse(
+    rawContent: string,
+    filepath?: string,
+    opts?: { minWordsPerSection?: number; maxLongParagraph?: number }
+  ): { observations: ContentObservations; tokens: unknown; textContent: string };
+
   // ═══ Findings ═══
   export const REPORT_VERSION: string;
   export const MODEL_VERSION: string;
