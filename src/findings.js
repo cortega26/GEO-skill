@@ -459,10 +459,134 @@ export function mapLegacyToFindings({
   return findings;
 }
 
+/**
+ * Convert v2 ContentObservations into the versioned Finding contract.
+ *
+ * Each observation kind maps to a stable ruleId. Observations with status
+ * "pass" are omitted (not findings). "warn" and "fail" produce findings
+ * with an evidence label derived from the observation kind.
+ *
+ * @param {import("./observations.js").ContentObservations} observations
+ * @param {string} profile — current content profile id
+ * @returns {import("./findings.js").Finding[]}
+ */
+export function mapObservationsToFindings(observations, profile = "editorial") {
+  const findings = [];
+
+  // Heading hierarchy
+  if (observations.headingHierarchy && observations.headingHierarchy.status !== "pass") {
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.heading_hierarchy",
+        status: observations.headingHierarchy.status,
+        message: observations.headingHierarchy.message,
+        evidenceLabel: "heuristic",
+        applicability: profile,
+        observedFacts: {
+          issues: observations.headingHierarchy.issues,
+        },
+      })
+    );
+  }
+
+  // Section self-containment
+  if (observations.sectionSelfContainment && observations.sectionSelfContainment.status !== "pass") {
+    const emptyCount =
+      observations.sectionSelfContainment.details?.filter((d) => d.isEmpty).length ?? 0;
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.section_containment",
+        status: observations.sectionSelfContainment.status,
+        message: observations.sectionSelfContainment.message,
+        evidenceLabel: "heuristic",
+        applicability: profile,
+        observedFacts: {
+          totalSections: observations.sectionSelfContainment.details?.length ?? 0,
+          emptySections: emptyCount,
+        },
+      })
+    );
+  }
+
+  // Answer-first
+  if (observations.answerFirst && observations.answerFirst.status !== "pass") {
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.answer_first",
+        status: observations.answerFirst.status,
+        message: observations.answerFirst.message,
+        evidenceLabel: "experimental",
+        applicability: profile,
+        observedFacts: {
+          wordCount: observations.answerFirst.wordCount,
+          hasDefinition: observations.answerFirst.hasDefinition,
+        },
+      })
+    );
+  }
+
+  // Attribution proximity
+  if (observations.attributionProximity && observations.attributionProximity.status !== "pass") {
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.attribution",
+        status: observations.attributionProximity.status,
+        message: observations.attributionProximity.message,
+        evidenceLabel: "strong",
+        applicability: profile,
+        observedFacts: {
+          statsWithNearbySource: observations.attributionProximity.statsWithNearbySource,
+          statsWithoutNearbySource: observations.attributionProximity.statsWithoutNearbySource,
+          quotesWithAttribution: observations.attributionProximity.quotesWithAttribution,
+          quotesWithoutAttribution: observations.attributionProximity.quotesWithoutAttribution,
+        },
+      })
+    );
+  }
+
+  // Content freshness
+  if (observations.contentFreshness && observations.contentFreshness.status !== "pass") {
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.freshness",
+        status: observations.contentFreshness.status,
+        message: observations.contentFreshness.message,
+        evidenceLabel: "heuristic",
+        applicability: profile,
+        observedFacts: {
+          publishedDate: observations.contentFreshness.publishedDate,
+          reviewedDate: observations.contentFreshness.reviewedDate,
+        },
+      })
+    );
+  }
+
+  // Link quality
+  if (observations.linkQuality && observations.linkQuality.status !== "pass") {
+    findings.push(
+      createFinding({
+        ruleId: "v2.observations.link_quality",
+        status: observations.linkQuality.status,
+        message: observations.linkQuality.message,
+        evidenceLabel: "strong",
+        applicability: profile,
+        observedFacts: {
+          externalLinkCount: observations.linkQuality.externalLinkCount,
+          hasSourcesSection: observations.linkQuality.hasSourcesSection,
+          hasExcessiveLinks: observations.linkQuality.hasExcessiveLinks,
+        },
+      })
+    );
+  }
+
+  return findings;
+}
+
 export default {
   REPORT_VERSION,
   MODEL_VERSION,
   createFinding,
   buildReportMeta,
   mapLegacyToFindings,
+  mapObservationsToFindings,
 };

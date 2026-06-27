@@ -25,11 +25,143 @@ import {
   setRemindersEnabled,
   validateSchemaFile,
 } from "../src/index.js";
+import { scoreContentV2 } from "../src/scoring-v2.js";
 
 // --- Global --config option ---
 function resolveConfig(cmd) {
   const { config } = loadConfig(cmd.optsWithGlobals().config);
   return config;
+}
+
+/**
+ * Print a v2 audit report to stdout in human-readable format.
+ * @param {string} filepath
+ * @param {Object} report
+ */
+function printV2Report(filepath, report) {
+  const bandColor = (band) => {
+    switch (band) {
+      case "production-ready":
+        return chalk.green.bold;
+      case "solid":
+        return chalk.blue.bold;
+      case "needs-work":
+        return chalk.yellow.bold;
+      default:
+        return chalk.red.bold;
+    }
+  };
+
+  const dimColor = (score, max) => {
+    const pct = max > 0 ? score / max : 0;
+    if (pct >= 0.8) return chalk.green;
+    if (pct >= 0.5) return chalk.yellow;
+    return chalk.red;
+  };
+
+  const banner = chalk.bold.magenta("═".repeat(50));
+  const sep = chalk.dim("─".repeat(50));
+
+  console.log(banner);
+  console.log(chalk.bold.magenta("       GEO OPTIMIZATION AUDIT REPORT (v2)        "));
+  console.log(banner);
+  console.log(`${chalk.white.bold("File:")} ${filepath}`);
+  console.log(
+    `${chalk.white.bold("Profile:")} ${chalk.cyan(report.profile.label)} (confidence: ${(report.profile.confidence * 100).toFixed(0)}%)`
+  );
+  if (report.profile.overridden) {
+    console.log(chalk.dim("  (explicit override)"));
+  }
+  console.log(
+    `${chalk.white.bold("Readiness:")} ${bandColor(report.readinessBand)(report.readinessLabel)}`
+  );
+  console.log(`  ${chalk.dim(report.readinessDescription)}`);
+  console.log(
+    `${chalk.white.bold("Effective score:")} ${chalk.bold(`${report.effectiveScore}`)} (${report.applicableDimensions} applicable dimensions)`
+  );
+  console.log(sep);
+
+  // Dimension scores
+  const dimLabels = {
+    structure: "1. Structure",
+    statistics: "2. Statistics",
+    quotations: "3. Quotations",
+    citations: "4. Citations",
+    clarity: "5. Clarity",
+  };
+
+  for (const [dim, label] of Object.entries(dimLabels)) {
+    const d = report.dimensions[dim];
+    if (!d) continue;
+    if (!d.applicable) {
+      console.log(
+        `${chalk.dim(`${label}: N/A (not applicable for ${report.profile.detected} profile)`)}`
+      );
+    } else {
+      console.log(
+        `${chalk.bold(`${label}: ${dimColor(d.score, d.max)(`${d.score}/${d.max}`)}`)}`
+      );
+    }
+    for (const detail of d.details) {
+      console.log(`   ${chalk.dim(detail)}`);
+    }
+  }
+
+  // Attribution summary
+  console.log(sep);
+  const attr = report.attributionSummary;
+  if (attr) {
+    console.log(
+      chalk.bold(
+        `Stats: ${attr.statsWithAttribution} attributed, ${attr.statsWithoutAttribution} unattributed | ` +
+          `Quotes: ${attr.quotesWithAttribution} attributed, ${attr.quotesWithoutAttribution} unattributed`
+      )
+    );
+  }
+  const link = report.linkSummary;
+  if (link) {
+    const linkIcon = link.hasExcessiveLinks ? chalk.red("⚠") : "";
+    console.log(
+      chalk.bold(`Links: ${link.externalLinks} external${linkIcon} | Sources section: ${link.hasSourcesSection ? "yes" : "no"}`)
+    );
+  }
+  const fresh = report.contentFreshness;
+  if (fresh && (fresh.publishedDate || fresh.reviewedDate)) {
+    console.log(
+      chalk.bold(
+        `Dates: ${fresh.publishedDate ? `published ${fresh.publishedDate}` : ""}${fresh.publishedDate && fresh.reviewedDate ? ", " : ""}${fresh.reviewedDate ? `reviewed ${fresh.reviewedDate}` : ""}`
+      )
+    );
+  }
+
+  // Recommendations
+  if (report.recommendations && report.recommendations.length > 0) {
+    console.log(sep);
+    console.log(chalk.bold("Recommendations:"));
+    for (const rec of report.recommendations) {
+      console.log(`  • ${rec}`);
+    }
+  }
+
+  // Findings summary
+  if (report.findings && report.findings.length > 0) {
+    const warns = report.findings.filter((f) => f.status === "warn").length;
+    const fails = report.findings.filter((f) => f.status === "fail").length;
+    if (warns + fails > 0) {
+      console.log(sep);
+      console.log(
+        chalk.bold(
+          `Findings: ${chalk.yellow(warns + " warnings")}, ${chalk.red(fails + " failures")}`
+        )
+      );
+      for (const f of report.findings.filter((f) => f.status !== "pass")) {
+        const icon = f.status === "fail" ? chalk.red("✗") : chalk.yellow("⚠");
+        console.log(`  ${icon} ${f.message} [${f.evidenceLabel}]`);
+      }
+    }
+  }
+
+  console.log(banner);
 }
 
 const program = new Command();
@@ -50,6 +182,7 @@ program
   .option("--ignore <patterns...>", "Additional ignore patterns (gitignore syntax)")
   .option("-s, --summary", "Show aggregate site report (JSON only)")
   .option("--explain", "Show evidence labels and sources alongside findings")
+  .option("-m, --model <version>", "Scoring model: v1 (default) or v2 (profile-aware)", "v1")
   .action((files, options, cmd) => {
     const config = resolveConfig(cmd);
 
@@ -66,6 +199,21 @@ program
     if (!["text", "json"].includes(format)) {
       console.error(`Error: --format must be "text" or "json", got "${format}".`);
       process.exit(1);
+    }
+
+    const model = options.model || "v1";
+    if (!["v1", "v2"].includes(model)) {
+      console.error(`Error: --model must be "v1" or "v2", got "${model}".`);
+      process.exit(1);
+    }
+
+    // Config-driven model override (config.profile implies v2 compatibility)
+    if (model === "v1" && config.profile && config.profile !== "auto") {
+      console.error(
+        chalk.yellow(
+          `Note: config.profile is set to "${config.profile}". Profile-aware scoring requires --model v2.`
+        )
+      );
     }
 
     let threshold = null;
@@ -103,6 +251,73 @@ program
       process.exit(1);
     }
 
+    // ── v2 path: profile-aware scoring ──
+    if (model === "v2") {
+      const v2Results = [];
+      for (const filepath of discovered) {
+        try {
+          const content = fs.readFileSync(filepath, { encoding: "utf8", flag: "r" });
+          const { report } = scoreContentV2(content, filepath, config);
+          const effectiveScore = report.effectiveScore ?? 0;
+          v2Results.push({ file: filepath, status: "success", score: effectiveScore, report });
+        } catch (e) {
+          v2Results.push({ file: filepath, status: "error", error: e.message });
+        }
+      }
+
+      if (format === "json") {
+        if (options.summary) {
+          const summary = aggregateReport(v2Results);
+          console.log(JSON.stringify(summary, null, 2));
+        } else {
+          const reports = v2Results.filter((r) => r.status === "success").map((r) => r.report);
+          console.log(JSON.stringify(reports.length === 1 ? reports[0] : reports, null, 2));
+        }
+      } else {
+        // Text output for v2
+        for (const r of v2Results) {
+          if (r.status === "success") {
+            printV2Report(r.file, r.report);
+          } else {
+            console.error(`\nError auditing ${r.file}: ${r.error}`);
+          }
+        }
+
+        if (v2Results.length > 1) {
+          const summary = aggregateReport(v2Results);
+          console.log(chalk.bold.blue("\n══════════════════════════════════════════════════"));
+          console.log(chalk.bold.blue("           SITE SUMMARY (model v2)               "));
+          console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
+          console.log(
+            `Files:       ${chalk.bold(summary.succeeded)}/${summary.totalFiles} succeeded`
+          );
+          if (summary.failed > 0) {
+            console.log(chalk.yellow(`             ${summary.failed} failed`));
+          }
+          if (summary.averageScore !== undefined) {
+            console.log(`Average:     ${chalk.bold(summary.averageScore)} (effective)`);
+            console.log(`Median:      ${chalk.bold(summary.medianScore)} (effective)`);
+            console.log(`Range:       ${summary.minScore} – ${summary.maxScore}`);
+          }
+        }
+      }
+
+      // Threshold check
+      if (threshold !== null) {
+        const minScore = Math.min(
+          ...v2Results.filter((r) => r.status === "success").map((r) => r.score)
+        );
+        if (minScore < threshold) {
+          process.exit(1);
+        }
+      }
+
+      // Engagement reminder
+      recordSuccessfulFreeInjection(config);
+      return;
+    }
+
+    // ── v1 path (default) ──
     // Batch audit (safe — no process.exit per file)
     const batchResults = auditFiles(discovered, config);
 
