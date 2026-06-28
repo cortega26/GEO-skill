@@ -15,6 +15,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   (overwrite-in-place is safe since the build is deterministic).
 - `tests/integrity.test.js` happy-path test now copies `dist/` to an isolated staging
   directory before importing, matching the pattern used by the other integrity tests.
+- `bin/cli.js` and `tests/badge.test.js` reformatted to Prettier code style.
 
 ### Added
 

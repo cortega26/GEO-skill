@@ -114,7 +114,10 @@ describe("CLI badge command", () => {
   it("exits 0 and outputs markdown badge", () => {
     const result = runCli(["badge", fixture]);
     assert.strictEqual(result.status, 0, `stderr: ${result.stderr}`);
-    assert.ok(result.stdout.startsWith("![GEO Score](https://img.shields.io/badge/"), `stdout: ${result.stdout}`);
+    assert.ok(
+      result.stdout.startsWith("![GEO Score](https://img.shields.io/badge/"),
+      `stdout: ${result.stdout}`
+    );
   });
 
   it("--format url outputs bare shields.io URL", () => {
@@ -129,12 +132,17 @@ describe("CLI badge command", () => {
     const result = runCli(["badge", fixture, "--format", "json"]);
     assert.strictEqual(result.status, 0, `stderr: ${result.stderr}`);
     let parsed;
-    assert.doesNotThrow(() => { parsed = JSON.parse(result.stdout); }, `stdout: ${result.stdout}`);
+    assert.doesNotThrow(() => {
+      parsed = JSON.parse(result.stdout);
+    }, `stdout: ${result.stdout}`);
     assert.ok(typeof parsed.score === "number", "score must be a number");
     assert.ok(typeof parsed.grade === "string", "grade must be a string");
     assert.ok(typeof parsed.badge_url === "string", "badge_url must be a string");
     assert.ok(typeof parsed.badge_markdown === "string", "badge_markdown must be a string");
-    assert.ok(parsed.badge_url.startsWith("https://img.shields.io/badge/"), `badge_url: ${parsed.badge_url}`);
+    assert.ok(
+      parsed.badge_url.startsWith("https://img.shields.io/badge/"),
+      `badge_url: ${parsed.badge_url}`
+    );
   });
 
   it("--label changes the badge label", () => {

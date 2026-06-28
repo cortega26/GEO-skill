@@ -1139,12 +1139,16 @@ program
     }
     const validFormats = ["markdown", "url", "json"];
     if (!validFormats.includes(options.format)) {
-      console.error(`Error: --format must be one of: ${validFormats.join(", ")}, got "${options.format}".`);
+      console.error(
+        `Error: --format must be one of: ${validFormats.join(", ")}, got "${options.format}".`
+      );
       process.exit(1);
     }
     const validStyles = ["flat", "flat-square", "plastic", "social"];
     if (!validStyles.includes(options.style)) {
-      console.error(`Error: --style must be one of: ${validStyles.join(", ")}, got "${options.style}".`);
+      console.error(
+        `Error: --style must be one of: ${validStyles.join(", ")}, got "${options.style}".`
+      );
       process.exit(1);
     }
 
@@ -1169,7 +1173,15 @@ program
     } else if (options.format === "json") {
       console.log(
         JSON.stringify(
-          { score, grade, badge_url: badgeUrl, badge_markdown: generateBadgeMarkdown(score, { label: options.label, style: options.style }) },
+          {
+            score,
+            grade,
+            badge_url: badgeUrl,
+            badge_markdown: generateBadgeMarkdown(score, {
+              label: options.label,
+              style: options.style,
+            }),
+          },
           null,
           2
         )
