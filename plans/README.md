@@ -1,7 +1,7 @@
 # Implementation roadmap
 
 **Status:** canonical execution index  
-**Last reconciled:** 2026-06-28 post Q0 + P0 gates cleared  
+**Last reconciled:** 2026-06-28 post Q0 + P0 gates cleared; advisor audit 041–050 queued  
 **Architecture gate:** T0 COMPLETE (029–034 done) ✓  
 **Quality gate:** Q0 GO (035–037 done, 2026-06-28) ✓  
 **Pro gate:** P0 GO (038–040 done, 2026-06-28) ✓  
@@ -112,6 +112,64 @@ AI discoverability — not just a score, but fixes.
 | [025](archive/025-harden-llms-artifacts.md) | Execution | Proposal-correct, curated artifacts | P2 | M | 024 | DONE |
 | [023](023-add-technical-discovery-audit.md) | Program slice | Local technical audit landed; remote/sitemap undecided | P2 | L | T0 | PARTIAL |
 | [026](archive/026-add-open-source-readiness.md) | Direction | Rule-pack readiness, not another engine | P3 | M | Q0, demand | SUPERSEDED |
+
+### Advisor audit — post-Q0 quality fixes (2026-06-28)
+
+Deep audit at commit `b09a5f8` of `src/` + `bin/cli.js` (470 tests passing, 0
+npm-audit vulnerabilities). All findings were verified against the live code
+before planning. These are independent, mostly small fixes; execute the quick
+cluster (041–043) first. Plans 044/045 touch the experimental v2 model.
+Plans 048–050 cover the remaining positive-tradeoff findings from the same audit.
+
+| Plan | Title | Cat | Priority | Effort | Depends on | Status |
+|---|---|---|---|---|---|---|
+| [041](041-fix-glob-ignore-translation.md) | Glob `**`/`*`/`?` ignore patterns translate correctly; no silent `.gitignore` discard | bug | P1 | S | — | TODO |
+| [042](042-add-typecheck-to-ci.md) | CI runs `npm run typecheck` (protect public `index.d.ts`) | dx | P1 | S | — | TODO |
+| [043](043-guard-all-artifact-writers.md) | CWD write-guard on robots/sitemap/llmstxt/generate-all writers | security | P2 | S | — | TODO |
+| [044](044-v2-safe-correctness-fixes.md) | Score-neutral v2 fixes: missing-h1 remediation, named v2 pronoun limit, reachable low confidence | bug | P2 | S | — | TODO |
+| [045](045-v2-quote-heading-detection-accuracy.md) | v2 quote/heading detection (mid-line + curly quotes, HTML DOM order, per-occurrence attribution) — **changes v2 scores** | bug | P2 | M | — | TODO |
+| [046](046-cover-sitemap-and-report-escaping.md) | Cover sitemap split/`validateSitemapXml` + HTML-report XSS-escaping regression tests | tests | P2 | S | — | TODO |
+| [047](047-fix-generate-all-sitemap-and-reread.md) | Fix `generate-all` sitemap `lastmod`; reuse audited content instead of re-reading | bug | P3 | M | — | TODO |
+| [048](048-consolidate-extract-page-metadata.md) | Consolidate `extractPageMetadata` — eliminate title divergence between JSON-LD and llms.txt for H1-less files | bug | P2 | S | — | TODO |
+| [049](049-tooling-hygiene.md) | Lint `tests/` (template-literal false positives, dead vars), expand pre-commit hook to lint + format | dx | P2 | S | — | TODO |
+| [050](050-core-layering-and-deduplication.md) | Extract `buildExplainLines` helper (scoring.js + renderer.js duplication); `injectSchema` returns result instead of printing | tech-debt | P3 | M | — | TODO |
+
+Recommended execution order and dependency notes:
+
+**Tier 1 — quick, independent, no behavior risk (do first):**
+- **041** glob bug (S, P1) — standalone; no dependencies; highest impact
+- **042** CI typecheck (S, P1) — standalone; once landed, catches API regressions
+  in all subsequent plans
+- **043** write-guard (S, P2) — standalone; security fix
+
+**Tier 2 — correctness and coverage (after Tier 1, can run in parallel):**
+- **044** v2 score-neutral fixes (S, P2) — standalone; do before 045
+- **045** v2 quote/heading accuracy (M, P2) — requires maintainer re-baseline;
+  do **after 044**; flag PR for maintainer sign-off per recalibration policy in
+  `docs/architecture.md`
+- **046** sitemap + XSS tests (S, P2) — standalone; no v2 dependency
+- **048** consolidate `extractPageMetadata` (S, P2) — standalone; changes
+  JSON-LD title for H1-less files from `"Untitled Document"` to filename;
+  **benefits from 042 being done first** (typecheck validates schema.js changes)
+- **049** tooling hygiene (S, P2) — standalone; pure tooling, zero behavior
+  risk; can run at any time
+
+**Tier 3 — larger refactors, lower priority (do last):**
+- **047** generate-all sitemap lastmod (M, P3) — standalone; **benefits from
+  042** (adds `AuditResult.content?: string` to `index.d.ts`)
+- **050** core layering (M, P3) — standalone; `injectSchema` return-type change
+  is a public API change; **benefits from 042** being in CI before the PR lands
+
+Considered and rejected during this audit (do not re-file):
+
+- **`auditFile` is dead code (~128 lines)**: REJECTED. It is a public export
+  (`src/index.js:26`) with extensive coverage in `tests/optimizer.test.js` and a
+  contract assertion in `tests/artifact.test.js`. The original reporter's
+  caller search only covered `src/` and missed the tests. Its rendering+`console`
+  mix inside `scoring.js` is real layering debt, tracked under the broader
+  "core prints directly" item, not removed.
+- **`report --compare` reads an arbitrary JSON path**: by design (the user
+  points it at their own baseline report). Not worth a guard.
 
 ### Deferred (by owner decision 2026-06-27)
 
