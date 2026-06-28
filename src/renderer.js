@@ -12,6 +12,43 @@ import { EVIDENCE_REGISTRY } from "./evidence.js";
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
+/**
+ * Builds the --explain evidence section as an array of chalk-formatted lines.
+ * Returns an empty array when there are no findings.
+ * @param {Array} findings
+ * @returns {string[]}
+ */
+export function buildExplainLines(findings) {
+  if (!findings || !findings.length) return [];
+  const lines = [];
+  lines.push(chalk.bold.magenta("\nEvidence & Sources (--explain):"));
+  const warnFail = findings.filter((f) => f.severity === "warn" || f.severity === "fail");
+  if (warnFail.length === 0) {
+    lines.push(chalk.green("  All checks passed — no evidence notes needed."));
+  } else {
+    for (const f of warnFail) {
+      const labelColor =
+        f.evidenceLabel === "strong"
+          ? chalk.green
+          : f.evidenceLabel === "probable"
+            ? chalk.blue
+            : f.evidenceLabel === "experimental"
+              ? chalk.yellow
+              : chalk.gray;
+      lines.push(`  ${chalk.bold(f.ruleId)} ${labelColor(`[${f.evidenceLabel}]`)}`);
+      if (f.sourceRefs && f.sourceRefs.length > 0) {
+        for (const ref of f.sourceRefs) {
+          const entry = EVIDENCE_REGISTRY[ref];
+          if (entry) {
+            lines.push(`    ← ${entry.title} (${entry.url})`);
+          }
+        }
+      }
+    }
+  }
+  return lines;
+}
+
 function dimColor(score, max) {
   const pct = max > 0 ? score / max : 0;
   if (pct >= 0.8) return chalk.green;
@@ -132,31 +169,7 @@ export function renderV1Report(report, filepath, options = {}) {
 
   // Explain mode
   if (explain && report.findings) {
-    lines.push(chalk.bold.magenta("\nEvidence & Sources (--explain):"));
-    const warnFail = report.findings.filter((f) => f.severity === "warn" || f.severity === "fail");
-    if (warnFail.length === 0) {
-      lines.push(chalk.green("  All checks passed — no evidence notes needed."));
-    } else {
-      for (const f of warnFail) {
-        const labelColor =
-          f.evidenceLabel === "strong"
-            ? chalk.green
-            : f.evidenceLabel === "probable"
-              ? chalk.blue
-              : f.evidenceLabel === "experimental"
-                ? chalk.yellow
-                : chalk.gray;
-        lines.push(`  ${chalk.bold(f.ruleId)} ${labelColor(`[${f.evidenceLabel}]`)}`);
-        if (f.sourceRefs && f.sourceRefs.length > 0) {
-          for (const ref of f.sourceRefs) {
-            const entry = EVIDENCE_REGISTRY[ref];
-            if (entry) {
-              lines.push(`    ← ${entry.title} (${entry.url})`);
-            }
-          }
-        }
-      }
-    }
+    lines.push(...buildExplainLines(report.findings));
   }
 
   lines.push(banner);

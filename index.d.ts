@@ -700,12 +700,19 @@ declare module "geo-opt" {
     noBranding?: boolean;
   }
 
+  export interface InjectSchemaResult {
+    replaced: boolean;
+    dryRun: boolean;
+    preview?: string;
+    message: string;
+  }
+
   export function injectSchema(
     filepath: string,
     schemaType: string,
     config: GeoConfig,
     options?: boolean | InjectOptions
-  ): void;
+  ): InjectSchemaResult;
 
   // ═══ Robots ═══
   export type CrawlerPurpose = "search" | "training" | "user" | "control" | "legacy";

@@ -132,7 +132,7 @@ Plans 048–050 cover the remaining positive-tradeoff findings from the same aud
 | [047](047-fix-generate-all-sitemap-and-reread.md) | Fix `generate-all` sitemap `lastmod`; reuse audited content instead of re-reading | bug | P3 | M | — | DONE |
 | [048](048-consolidate-extract-page-metadata.md) | Consolidate `extractPageMetadata` — eliminate title divergence between JSON-LD and llms.txt for H1-less files | bug | P2 | S | — | DONE |
 | [049](049-tooling-hygiene.md) | Lint `tests/` (template-literal false positives, dead vars), expand pre-commit hook to lint + format | dx | P2 | S | — | DONE |
-| [050](050-core-layering-and-deduplication.md) | Extract `buildExplainLines` helper (scoring.js + renderer.js duplication); `injectSchema` returns result instead of printing | tech-debt | P3 | M | — | TODO |
+| [050](050-core-layering-and-deduplication.md) | Extract `buildExplainLines` helper (scoring.js + renderer.js duplication); `injectSchema` returns result instead of printing | tech-debt | P3 | M | — | DONE |
 
 Recommended execution order and dependency notes:
 

@@ -5,7 +5,7 @@ import chalk from "chalk";
 import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
 import { MAX_PRONOUN_DENSITY } from "./config.js";
 import { mapLegacyToFindings, buildReportMeta } from "./findings.js";
-import { EVIDENCE_REGISTRY } from "./evidence.js";
+import { buildExplainLines } from "./renderer.js";
 
 const VERBAL_STATS_PATTERNS = [
   /\b(?:one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:-|—)\s*(?:third|quarter|fifth|sixth|seventh|eighth|ninth|tenth)s?\b/gi,
@@ -601,32 +601,8 @@ export function auditFile(filepath, config, outputFormat = "text", explain = fal
 
     // Explain mode: show evidence labels and source refs per finding
     if (explain && report.findings) {
-      console.log(chalk.bold.magenta("\nEvidence & Sources (--explain):"));
-      const warnFailFindings = report.findings.filter(
-        (f) => f.severity === "warn" || f.severity === "fail"
-      );
-      if (warnFailFindings.length === 0) {
-        console.log(chalk.green("  All checks passed — no evidence notes needed."));
-      } else {
-        for (const f of warnFailFindings) {
-          const labelColor =
-            f.evidenceLabel === "strong"
-              ? chalk.green
-              : f.evidenceLabel === "probable"
-                ? chalk.blue
-                : f.evidenceLabel === "experimental"
-                  ? chalk.yellow
-                  : chalk.gray;
-          console.log(`  ${chalk.bold(f.ruleId)} ${labelColor(`[${f.evidenceLabel}]`)}`);
-          if (f.sourceRefs.length > 0) {
-            for (const ref of f.sourceRefs) {
-              const entry = EVIDENCE_REGISTRY[ref];
-              if (entry) {
-                console.log(`    ← ${entry.title} (${entry.url})`);
-              }
-            }
-          }
-        }
+      for (const line of buildExplainLines(report.findings)) {
+        console.log(line);
       }
     }
     console.log(banner);

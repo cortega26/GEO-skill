@@ -44,6 +44,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `COMMUNITY_SCHEMA_TYPES` now includes `"news-article"`.
 - `auditFiles` results now include the audited file `content`; `generate-all`
   reuses it instead of re-reading each file from disk.
+- `injectSchema` now returns a `{ replaced, dryRun, message, preview? }` object
+  instead of printing directly. The CLI still prints the message; programmatic
+  callers can inspect or suppress it.
+- Extracted shared `buildExplainLines(findings)` helper from the `--explain`
+  rendering path (was duplicated in `scoring.js` and `renderer.js`).
 
 ### Added
 

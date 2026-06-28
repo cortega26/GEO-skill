@@ -51,6 +51,7 @@ import {
   renderAggregateReportHtml,
   renderComparisonHtml,
 } from "../src/index.js";
+import { buildExplainLines } from "../src/renderer.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -2485,6 +2486,27 @@ Auto-scaling reduces costs by 40% according to AWS benchmarks.
 ## Security
 End-to-end encryption protects all data in transit and at rest.
 `;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// buildExplainLines (plan 050)
+// ═══════════════════════════════════════════════════════════════════════════
+
+test("buildExplainLines returns formatted lines for warn/fail findings", () => {
+  const findings = [
+    { severity: "fail", ruleId: "missing_h1", evidenceLabel: "strong", sourceRefs: [] },
+    { severity: "pass", ruleId: "keyword_density", evidenceLabel: "probable", sourceRefs: [] },
+  ];
+  const lines = buildExplainLines(findings);
+  assert.ok(lines.length >= 2, "should have header + at least one finding line");
+  assert.ok(lines.some((l) => l.includes("missing_h1")));
+  assert.ok(!lines.some((l) => l.includes("keyword_density")), "pass findings excluded");
+});
+
+test("buildExplainLines returns all-passed message when no warn/fail", () => {
+  const findings = [{ severity: "pass", ruleId: "ok", evidenceLabel: "strong", sourceRefs: [] }];
+  const lines = buildExplainLines(findings);
+  assert.ok(lines.some((l) => l.includes("All checks passed")));
+});
 
 test("renderV1ReportHtml returns valid HTML structure", () => {
   const tempFile = path.join(os.tmpdir(), "html-report-v1.md");

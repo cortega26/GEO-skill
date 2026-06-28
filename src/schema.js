@@ -590,18 +590,15 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
   });
 
   const isHtml = filepath.endsWith(".html") || content.toLowerCase().includes("<html");
+  let message;
   if (isHtml) {
-    if (replaced) {
-      console.log(`Successfully replaced existing JSON-LD script tag in ${filepath}.`);
-    } else {
-      console.log(`Successfully injected JSON-LD script tag into ${filepath}.`);
-    }
+    message = replaced
+      ? `Successfully replaced existing JSON-LD script tag in ${filepath}.`
+      : `Successfully injected JSON-LD script tag into ${filepath}.`;
   } else {
-    if (replaced) {
-      console.log(`Successfully updated existing Schema.org block in markdown file ${filepath}.`);
-    } else {
-      console.log(`Successfully appended Schema.org block to markdown file ${filepath}.`);
-    }
+    message = replaced
+      ? `Successfully updated existing Schema.org block in markdown file ${filepath}.`
+      : `Successfully appended Schema.org block to markdown file ${filepath}.`;
   }
 
   if (dryRun) {
@@ -609,10 +606,8 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
     const previewJson = JSON.stringify(schema, null, 2).replace(/<\//g, "<\\/");
     const previewSig = noBranding ? "" : `\n\n${TOOLTICIAN_BRANDING_MARKDOWN}\n`;
     const preview = `${previewSig}\n\`\`\`json\n${previewJson}\n\`\`\`\n`;
-    console.log("=== DRY RUN: The following would be injected ===");
-    console.log(preview);
-    console.log("=== End of dry run preview ===");
-    return;
+    const dryRunMessage = `=== DRY RUN: The following would be injected ===\n${preview}\n=== End of dry run preview ===`;
+    return { replaced, dryRun: true, preview, message: dryRunMessage };
   }
 
   try {
@@ -620,4 +615,6 @@ export function injectSchema(filepath, schemaType, config, options = {}) {
   } catch (e) {
     throw new Error(`Failed to write to file ${filepath}: ${e.message}`, { cause: e });
   }
+
+  return { replaced, dryRun: false, message };
 }
