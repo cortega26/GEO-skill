@@ -7,6 +7,11 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Docs
+
+- Rewrote `README.md` with an improved structure, compelling problem statement, CI/CD integration example, expanded command reference, and clarified evidence vocabulary.
+- Added `README.es.md`: full Spanish translation of the README, linked bidirectionally with the English version.
+
 ### Fixed
 
 - `scripts/build.js` now reads `src/integrity.js` as the integrity template instead of
