@@ -9,6 +9,22 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- `auditLlmsTxt` now returns three separate arrays — `issues` (hard errors), `notes`
+  (informational recommendations), and `warnings` (safety concerns) — instead of a single `issues`
+  list. Only a missing H1 makes `valid: false`, consistent with the llmstxt.org proposal which
+  requires only H1. Missing blockquote and H2 sections are now `notes`.
+- `auditLlmsTxt` detects duplicate URLs, unsafe URL schemes, and private-path links and reports
+  them as `warnings`.
+- `generateLlmsTxt` no longer curates pages into `## Optional` based on GEO score by default.
+  Set `entry.optional = true` to explicitly mark a page as optional. The legacy
+  `optionalThreshold` option still works as a deprecated opt-in (emits a stderr warning) and will
+  be removed in a future release.
+- `geo-opt llmstxt audit` output now shows errors in red, warnings in yellow, and recommendations
+  in cyan, with separate labelled sections.
+- `LlmsAuditReport` TypeScript interface gains `notes: string[]` and `warnings: string[]` fields.
+- `LlmsEntry` TypeScript interface gains `optional?: boolean` field.
+- `optionalThreshold` in `generateLlmsTxt` options is marked `@deprecated` in types.
+
 - **Breaking:** `geo-opt schema <file> article` and `geo-opt inject <file> article` now emit
   `Article` instead of `NewsArticle`. Use the new `news-article` type for time-sensitive news
   content (requires `datePublished` in config).

@@ -87,38 +87,57 @@ export function resolvePageUrl(filepath, baseDir, siteUrl) {
 /**
  * Generate an llms.txt file following the llmstxt.org specification.
  *
- * @param {Array<{ title: string, description: string, url: string, section?: string, score?: number }>} entries
- * @param {object} options
+ * Entries are grouped by their `section` field (or "Pages" by default).
+ * Pages whose `optional` field is `true` are placed in the `## Optional`
+ * section at the end.
+ *
+ * Score-based curation (`optionalThreshold`) is deprecated: it moves pages to
+ * Optional based on a legacy GEO score, which demotes valid content that simply
+ * lacks style markers. Pass `{ optionalThreshold: <number> }` with an explicit
+ * value to opt in; omitting it disables score-based curation entirely.
+ *
+ * @param {Array<{ title: string, description?: string, url: string, section?: string, optional?: boolean, score?: number }>} entries
+ * @param {object} [options]
  * @param {string} [options.siteTitle] - H1 title of the site
- * @param {string} [options.siteDescription] - blockquote summary
- * @param {number} [options.optionalThreshold=50] - GEO score below which pages go to ## Optional
+ * @param {string} [options.siteDescription] - blockquote summary (recommended by the proposal)
+ * @param {number} [options.optionalThreshold] - DEPRECATED: GEO score below which pages move to
+ *   ## Optional. Omit to disable. Will be removed in a future release.
  * @returns {string} markdown content for llms.txt
  */
 export function generateLlmsTxt(entries, options = {}) {
-  const {
-    siteTitle = "Site Documentation",
-    siteDescription = "",
-    optionalThreshold = 50,
-  } = options;
+  const { siteTitle = "Site Documentation", siteDescription = "", optionalThreshold } = options;
+
+  if (optionalThreshold !== undefined) {
+    // Emit a deprecation warning to stderr so CLI users notice without breaking output
+    process.stderr.write(
+      "[geo-opt] Warning: generateLlmsTxt optionalThreshold is deprecated. " +
+        "Set entry.optional = true on entries you want in ## Optional instead.\n"
+    );
+  }
 
   const lines = [];
 
-  // H1
+  // H1 (required by the proposal)
   lines.push(`# ${siteTitle}`);
   lines.push("");
 
-  // Blockquote summary
+  // Blockquote summary (recommended by the proposal, not required)
   if (siteDescription) {
     lines.push(`> ${siteDescription}`);
     lines.push("");
   }
 
-  // Group entries by section
+  // Group entries by section; optional entries always go to ## Optional
   const sections = new Map();
   const optional = [];
 
   for (const entry of entries) {
-    if (entry.score !== undefined && entry.score < optionalThreshold) {
+    const isOptional =
+      entry.optional === true ||
+      (optionalThreshold !== undefined &&
+        entry.score !== undefined &&
+        entry.score < optionalThreshold);
+    if (isOptional) {
       optional.push(entry);
     } else {
       const section = entry.section || "Pages";
@@ -127,7 +146,7 @@ export function generateLlmsTxt(entries, options = {}) {
     }
   }
 
-  // Write regular sections
+  // Regular sections
   for (const [sectionName, sectionEntries] of sections) {
     lines.push(`## ${sectionName}`);
     lines.push("");
@@ -138,7 +157,7 @@ export function generateLlmsTxt(entries, options = {}) {
     lines.push("");
   }
 
-  // Write Optional section
+  // Optional section (always last per the proposal)
   if (optional.length > 0) {
     lines.push("## Optional");
     lines.push("");
@@ -479,51 +498,96 @@ function parseLlmsEntries(llmsContent) {
 /**
  * Audit an existing llms.txt file for spec compliance and coverage.
  *
+ * Following the llmstxt.org proposal: only H1 is a hard requirement.
+ * Missing blockquote, H2 sections, or entry descriptions are notes
+ * (informational). Safety issues (bad URL schemes, duplicate URLs,
+ * private-path leaks) are reported as warnings but do not make the
+ * file invalid on their own.
+ *
  * @param {string} llmsContent - content of the llms.txt file
  * @param {string[]} [discoveredFiles=[]] - absolute paths of all site files (for coverage check)
  * @param {{ siteUrl?: string, baseDir?: string }} [options={}]
- * @returns {{ valid: boolean, issues: string[], coverage?: { listed: number, missing: number, total: number, missingFiles: string[] } }}
+ * @returns {{
+ *   valid: boolean,
+ *   issues: string[],
+ *   notes: string[],
+ *   warnings: string[],
+ *   coverage?: { listed: number, missing: number, total: number, missingFiles: string[] }
+ * }}
  */
 export function auditLlmsTxt(llmsContent, discoveredFiles = [], options = {}) {
   const issues = [];
+  const notes = [];
+  const warnings = [];
 
-  // Check required H1
+  // Hard requirement: H1
   if (!/^#\s+\S/m.test(llmsContent)) {
     issues.push("Missing required H1 title (e.g. '# Site Name').");
   }
 
-  // Check required blockquote
+  // Notes (informational, not errors per the proposal)
   if (!/^>\s+\S/m.test(llmsContent)) {
-    issues.push("Missing recommended blockquote description (e.g. '> Brief summary...').");
+    notes.push(
+      "No blockquote summary found. Consider adding '> Brief description...' after the H1."
+    );
   }
-
-  // Check at least one H2 section
   if (!/^##\s+\S/m.test(llmsContent)) {
-    issues.push("No H2 sections found. Add at least one section with page links.");
+    notes.push(
+      "No H2 sections found. Sections group links for LLMs; consider adding at least one."
+    );
   }
 
   // Parse entries
   const entries = parseLlmsEntries(llmsContent);
 
-  // Check for entries without descriptions
+  // Notes: entries without descriptions
   const withoutDesc = entries.filter((e) => {
-    // Find original line to check if it has a description after the URL
     const linePattern = new RegExp(
       `\\[${e.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\]\\(${e.url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\):`
     );
     return !linePattern.test(llmsContent);
   });
   if (withoutDesc.length > 0) {
-    issues.push(
-      `${withoutDesc.length} page(s) have no description (add ': description' after the URL).`
+    notes.push(
+      `${withoutDesc.length} link(s) have no description. Adding ': description' after the URL helps LLMs understand context.`
     );
   }
 
-  // Check Optional section is last
+  // Note: Optional section should be last
   const h2Matches = [...llmsContent.matchAll(/^##\s+(.+)$/gm)];
   const optionalIdx = h2Matches.findIndex((m) => m[1].trim().toLowerCase() === "optional");
   if (optionalIdx >= 0 && optionalIdx < h2Matches.length - 1) {
-    issues.push("The '## Optional' section should be the last section in the file.");
+    notes.push("The '## Optional' section should be the last section in the file.");
+  }
+
+  // Safety warnings: URL scheme and duplicate detection
+  const seenUrls = new Set();
+  const PRIVATE_PATTERNS = [/\/admin\b/, /\/private\b/, /\/internal\b/, /\/\./, /\/_/];
+  for (const entry of entries) {
+    const url = entry.url;
+
+    // Non-http(s) scheme
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^https?:/i.test(url)) {
+      warnings.push(`Unsafe or unexpected URL scheme in entry '${entry.title}': ${url}`);
+    }
+
+    // Duplicate URLs
+    if (seenUrls.has(url)) {
+      warnings.push(`Duplicate URL in llms.txt: ${url}`);
+    } else {
+      seenUrls.add(url);
+    }
+
+    // Private path patterns (relative or absolute URLs)
+    let pathname = url;
+    try {
+      pathname = new URL(url).pathname;
+    } catch {
+      /* relative */
+    }
+    if (PRIVATE_PATTERNS.some((re) => re.test(pathname))) {
+      warnings.push(`Entry '${entry.title}' links to a potentially private path: ${pathname}`);
+    }
   }
 
   // Coverage check against discovered files
@@ -541,7 +605,6 @@ export function auditLlmsTxt(llmsContent, discoveredFiles = [], options = {}) {
     const { baseDir = "" } = options;
     const missingFiles = [];
     for (const fp of discoveredFiles) {
-      // Resolve each discovered file to a URL and check if it's listed
       let relPath;
       try {
         relPath = path.relative(baseDir, fp);
@@ -558,7 +621,6 @@ export function auditLlmsTxt(llmsContent, discoveredFiles = [], options = {}) {
           .replace(/\/index$/, "");
       if (relUrl === "/" || relUrl === "") continue; // root/index page
       if (!listedPaths.has(relUrl) && !listedPaths.has(relUrl + "/")) {
-        // Also check if any entry URL contains a matching path
         const found = [...listedPaths].some(
           (p) => p.includes(path.basename(withoutExt)) || p.includes(relUrl)
         );
@@ -571,16 +633,18 @@ export function auditLlmsTxt(llmsContent, discoveredFiles = [], options = {}) {
       listed: entries.length,
       missing: missingFiles.length,
       total: discoveredFiles.length,
-      missingFiles: missingFiles.slice(0, 10), // top 10
+      missingFiles: missingFiles.slice(0, 10),
     };
     if (missingFiles.length > 0) {
-      issues.push(`${missingFiles.length} file(s) on the site are not listed in llms.txt.`);
+      notes.push(`${missingFiles.length} file(s) on the site are not listed in llms.txt.`);
     }
   }
 
   return {
     valid: issues.length === 0,
     issues,
+    notes,
+    warnings,
     ...(coverage ? { coverage } : {}),
   };
 }

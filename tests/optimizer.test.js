@@ -1668,20 +1668,38 @@ test("generateLlmsTxt produces valid structure with all sections", () => {
   assert.ok(result.includes("[Old Archive](https://example.com/archive)"));
 });
 
-test("generateLlmsTxt puts low-score pages in Optional", () => {
+test("generateLlmsTxt puts explicit optional entries in Optional section", () => {
+  const entries = [
+    { title: "Good", url: "https://example.com/good", description: "x" },
+    { title: "Supplemental", url: "https://example.com/extra", description: "x", optional: true },
+  ];
+  const result = generateLlmsTxt(entries, { siteTitle: "Test" });
+  assert.ok(result.includes("## Optional"), "Should have Optional section");
+  assert.ok(result.includes("[Supplemental]"), "Optional entry should appear");
+  const mainStart = result.indexOf("## ");
+  const optionalStart = result.indexOf("## Optional");
+  assert.ok(optionalStart > mainStart, "Optional should come after main sections");
+});
+
+test("generateLlmsTxt without optionalThreshold does not move low-score pages", () => {
   const entries = [
     { title: "Good", url: "https://example.com/good", description: "x", score: 80 },
     { title: "Weak", url: "https://example.com/weak", description: "x", score: 30 },
   ];
-  const result = generateLlmsTxt(entries, {
-    siteTitle: "Test",
-    optionalThreshold: 50,
-  });
-  assert.ok(result.includes("## Optional"));
-  assert.ok(result.includes("[Weak]"));
-  const mainStart = result.indexOf("## ");
-  const optionalStart = result.indexOf("## Optional");
-  assert.ok(optionalStart > mainStart, "Optional should come after main sections");
+  // No optionalThreshold — score should not influence section placement
+  const result = generateLlmsTxt(entries, { siteTitle: "Test" });
+  assert.ok(!result.includes("## Optional"), "Should not have Optional section when no threshold");
+  assert.ok(result.includes("[Weak]"), "Low-score entry should appear in normal section");
+});
+
+test("generateLlmsTxt optionalThreshold still works as deprecated opt-in", () => {
+  const entries = [
+    { title: "Good", url: "https://example.com/good", description: "x", score: 80 },
+    { title: "Weak", url: "https://example.com/weak", description: "x", score: 30 },
+  ];
+  const result = generateLlmsTxt(entries, { siteTitle: "Test", optionalThreshold: 50 });
+  assert.ok(result.includes("## Optional"), "Deprecated opt-in should still work");
+  assert.ok(result.includes("[Weak]"), "Low-score entry should be in Optional");
 });
 
 test("generateLlmsFullTxt compiles full page content", () => {
@@ -1714,21 +1732,61 @@ test("auditLlmsTxt reports valid llms.txt as valid", () => {
   assert.strictEqual(report.issues.length, 0);
 });
 
-test("auditLlmsTxt detects missing H1 and blockquote", () => {
+test("auditLlmsTxt detects missing H1 (hard error) and blockquote as note", () => {
   const content = `## Pages
 
 - [Home](https://example.com/): Homepage.
 `;
   const report = auditLlmsTxt(content);
+  // Missing H1 is the only hard error per the llmstxt.org proposal
   assert.strictEqual(report.valid, false);
   assert.ok(
     report.issues.some((i) => i.includes("H1")),
-    "Should report missing H1"
+    "Should report missing H1 as an issue"
+  );
+  // Missing blockquote is informational, not an error
+  assert.ok(Array.isArray(report.notes), "Should have notes array");
+  assert.ok(
+    report.notes.some((n) => n.includes("blockquote")),
+    "Should note missing blockquote as a recommendation"
   );
   assert.ok(
-    report.issues.some((i) => i.includes("blockquote")),
-    "Should report missing blockquote"
+    !report.issues.some((i) => i.includes("blockquote")),
+    "Missing blockquote should not be a hard issue"
   );
+});
+
+test("auditLlmsTxt returns notes and warnings fields", () => {
+  const content = `# My Site
+
+> A sample site.
+
+## Pages
+
+- [Home](https://example.com/): The homepage.
+- [Home](https://example.com/): Duplicate link.
+- [Admin](https://example.com/admin): Admin panel.
+`;
+  const report = auditLlmsTxt(content);
+  assert.ok(Array.isArray(report.notes), "Should have notes array");
+  assert.ok(Array.isArray(report.warnings), "Should have warnings array");
+  assert.ok(
+    report.warnings.some((w) => w.includes("Duplicate")),
+    "Should warn about duplicate URL"
+  );
+  assert.ok(
+    report.warnings.some((w) => w.includes("private")),
+    "Should warn about private-looking path"
+  );
+});
+
+test("auditLlmsTxt: H1-only content is valid with notes", () => {
+  const content = `# My Minimal Site\n`;
+  const report = auditLlmsTxt(content);
+  // H1 is the only hard requirement; missing blockquote/H2 are notes only
+  assert.strictEqual(report.valid, true, "H1-only content should be valid");
+  assert.strictEqual(report.issues.length, 0, "Should have no hard issues");
+  assert.ok(report.notes.length > 0, "Should have informational notes");
 });
 
 test("generateRobotsTxt includes all AI crawlers and disallow paths", () => {
