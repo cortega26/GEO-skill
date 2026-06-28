@@ -606,11 +606,25 @@ llmstxtCmd
     console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
 
     if (report.valid) {
-      console.log(chalk.green.bold("✓ llms.txt is valid and complete."));
+      console.log(chalk.green.bold("✓ llms.txt is valid (H1 present, no hard errors)."));
     } else {
-      console.log(chalk.yellow.bold(`${report.issues.length} issue(s) found:`));
+      console.log(chalk.red.bold(`${report.issues.length} error(s) found:`));
       for (const issue of report.issues) {
-        console.log(chalk.yellow(`  - ${issue}`));
+        console.log(chalk.red(`  ✗ ${issue}`));
+      }
+    }
+
+    if (report.warnings && report.warnings.length > 0) {
+      console.log(chalk.yellow.bold(`\n${report.warnings.length} warning(s):`));
+      for (const warn of report.warnings) {
+        console.log(chalk.yellow(`  ⚠ ${warn}`));
+      }
+    }
+
+    if (report.notes && report.notes.length > 0) {
+      console.log(chalk.cyan.bold(`\n${report.notes.length} recommendation(s):`));
+      for (const note of report.notes) {
+        console.log(chalk.cyan(`  ℹ ${note}`));
       }
     }
 

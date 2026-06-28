@@ -770,6 +770,9 @@ declare module "geo-opt" {
     url: string;
     description?: string;
     section?: string;
+    /** Set to true to place this entry in the ## Optional section. */
+    optional?: boolean;
+    /** @deprecated Use optional: true instead. Kept for backward compatibility. */
     score?: number;
     content?: string;
   }
@@ -779,6 +782,10 @@ declare module "geo-opt" {
     options?: {
       siteTitle?: string;
       siteDescription?: string;
+      /**
+       * @deprecated Set entry.optional = true instead. Will be removed in a future release.
+       * When provided, pages with score < optionalThreshold are placed in ## Optional.
+       */
       optionalThreshold?: number;
     }
   ): string;
@@ -805,7 +812,12 @@ declare module "geo-opt" {
 
   export interface LlmsAuditReport {
     valid: boolean;
+    /** Hard errors (only missing H1 per the llmstxt.org proposal). */
     issues: string[];
+    /** Informational recommendations that don't make the file invalid. */
+    notes: string[];
+    /** Safety warnings (duplicate URLs, unsafe schemes, private paths). */
+    warnings: string[];
     coverage?: {
       listed: number;
       missing: number;
