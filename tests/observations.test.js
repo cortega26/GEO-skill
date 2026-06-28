@@ -56,6 +56,15 @@ describe("heading hierarchy", () => {
     const obs = observeContent(content, "test.md");
     assert.ok(obs.headingHierarchy.issues.some((i) => i.includes("Duplicate")));
   });
+
+  it("F9: reads HTML headings in document order (h2 before h1 should warn)", () => {
+    const content = "<h2>First</h2><h1>Second</h1>";
+    const obs = observeContent(content, "test.html");
+    assert.ok(
+      obs.headingHierarchy.issues.some((i) => i.includes("instead of h1")),
+      `Expected 'instead of h1' issue for h2-first HTML, got: ${JSON.stringify(obs.headingHierarchy.issues)}`
+    );
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -181,6 +190,50 @@ describe("attribution proximity", () => {
     const content = "Just a simple paragraph without any statistics or quotations.";
     const obs = observeContent(content, "test.md");
     assert.equal(obs.attributionProximity.status, "pass");
+  });
+
+  it("F10: detects mid-line inline quotes (not at line end)", () => {
+    const content =
+      'The report notes "productivity increased substantially this quarter" and later adds "customer satisfaction reached an all-time high" in the same section.';
+    const obs = observeContent(content, "test.md");
+    assert.ok(
+      obs.attributionProximity.quotesWithAttribution +
+        obs.attributionProximity.quotesWithoutAttribution >=
+        2,
+      `Expected >=2 total quotes from mid-line inline quotes, got ${obs.attributionProximity.quotesWithAttribution + obs.attributionProximity.quotesWithoutAttribution}`
+    );
+  });
+
+  it("F13: detects typographic curly quotes", () => {
+    const content =
+      "The CEO stated “We are committed to excellence in every aspect of our operations” during the annual meeting.";
+    const obs = observeContent(content, "test.md");
+    const total =
+      obs.attributionProximity.quotesWithAttribution +
+      obs.attributionProximity.quotesWithoutAttribution;
+    assert.ok(total >= 1, `Expected >=1 quote from curly quotes, got ${total}`);
+  });
+
+  it("F6: evaluates repeated stats at their own positions (split attribution)", () => {
+    // First occurrence of 50% has a source nearby; second doesn't
+    const content =
+      "According to a study, 50% of users prefer X. Later, we also found 50% improvement in Y without any source cited.";
+    const obs = observeContent(content, "test.md");
+    // Both occurrences should be counted
+    const totalStats =
+      obs.attributionProximity.statsWithNearbySource +
+      obs.attributionProximity.statsWithoutNearbySource;
+    assert.ok(totalStats >= 2, `Expected >=2 stats detected, got ${totalStats}`);
+    // The first 50% should be attributed (near "According to a study")
+    assert.ok(
+      obs.attributionProximity.statsWithNearbySource >= 1,
+      `Expected >=1 stat with nearby source, got ${obs.attributionProximity.statsWithNearbySource}`
+    );
+    // The second 50% should be unattributed
+    assert.ok(
+      obs.attributionProximity.statsWithoutNearbySource >= 1,
+      `Expected >=1 stat without nearby source, got ${obs.attributionProximity.statsWithoutNearbySource}`
+    );
   });
 });
 

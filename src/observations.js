@@ -16,6 +16,18 @@ import { marked } from "marked";
 import * as cheerio from "cheerio";
 import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
 
+// Returns the index of the (n+1)-th (0-based) occurrence of needle, or -1.
+function nthIndexOf(haystack, needle, n) {
+  let idx = -1;
+  let from = 0;
+  for (let k = 0; k <= n; k++) {
+    idx = haystack.indexOf(needle, from);
+    if (idx === -1) return -1;
+    from = idx + needle.length;
+  }
+  return idx;
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Observation data types (plain objects, not classes, for portability)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -237,12 +249,12 @@ function observeHeadingHierarchy(tokens, htmlMeta = null) {
     const $ = htmlMeta.cheerio;
     const body = $("body").length ? $("body") : $.root();
     headings = [];
-    for (let i = 1; i <= 6; i++) {
-      body.find(`h${i}`).each((_, el) => {
-        const text = $(el).text().replace(/\s+/g, " ").trim();
-        if (text) headings.push({ level: i, text, index: headings.length });
-      });
-    }
+    body.find("h1, h2, h3, h4, h5, h6").each((_, el) => {
+      const tag = (el.tagName || el.name || "").toLowerCase();
+      const level = Number(tag.slice(1));
+      const text = $(el).text().replace(/\s+/g, " ").trim();
+      if (text) headings.push({ level, text, index: headings.length });
+    });
   } else {
     // ── Markdown: extraer headings del AST ──
     headings = extractHeadings(tokens);
@@ -578,8 +590,11 @@ function observeAttributionProximity(textContent, _tokens, _htmlMeta = null) {
   let statsWithNearbySource = 0;
   let statsWithoutNearbySource = 0;
 
+  const statSeen = new Map();
   for (const stat of stats) {
-    const idx = textContent.indexOf(stat);
+    const occurrence = statSeen.get(stat) || 0;
+    statSeen.set(stat, occurrence + 1);
+    const idx = nthIndexOf(textContent, stat, occurrence);
     if (idx === -1) continue;
     const window = textContent.slice(Math.max(0, idx - 50), idx + 200);
     const hasSource = sourcePatterns.some((p) => p.test(window));
@@ -590,10 +605,13 @@ function observeAttributionProximity(textContent, _tokens, _htmlMeta = null) {
     }
   }
 
-  // Check quote attribution
-  const blockquoteCount = (textContent.match(/^>\s+/gm) || []).length;
-  const inlineQuotes = textContent.match(/"([^"]{15,})"/g) || [];
-  const totalQuotes = blockquoteCount + inlineQuotes.length;
+  // Check quote attribution. Evaluate attribution over the SAME quotes that
+  // totalQuotes counts: blockquote lines + inline quotes (straight OR curly),
+  // each located at its own occurrence so repeated quotes get their own window.
+  const blockquoteLines = textContent.match(/^>\s*.+$/gm) || [];
+  const inlineQuotes = textContent.match(/["“]([^"”]{15,})["”]/g) || [];
+  const evaluatedQuotes = [...blockquoteLines, ...inlineQuotes];
+  const totalQuotes = evaluatedQuotes.length;
 
   // Look for attribution patterns near blockquotes.
   // We require either a named person (— Full Name, Title) or an
@@ -611,15 +629,16 @@ function observeAttributionProximity(textContent, _tokens, _htmlMeta = null) {
     /(?:according\s+to|reported\s+by|per)\s+(?:the\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Institute|University|Foundation|Association|Corporation|Inc\.?|LLC|Report|Study|Survey)/i,
   ];
 
-  const quoteRegions = textContent.match(/(?:^>\s*.+|"[^"]{15,}")(?:\n|$)/gm) || [];
-
   let quotesWithAttribution = 0;
   let quotesWithoutAttribution = 0;
-
-  for (const quote of quoteRegions) {
-    const idx = textContent.indexOf(quote.trim());
+  const quoteSeen = new Map();
+  for (const quote of evaluatedQuotes) {
+    const needle = quote.trim();
+    const occurrence = quoteSeen.get(needle) || 0;
+    quoteSeen.set(needle, occurrence + 1);
+    const idx = nthIndexOf(textContent, needle, occurrence);
     if (idx === -1) continue;
-    const window = textContent.slice(Math.max(0, idx - 80), idx + quote.length + 150);
+    const window = textContent.slice(Math.max(0, idx - 80), idx + needle.length + 150);
     const hasAttr = attributionPatterns.some((p) => p.test(window));
     if (hasAttr) {
       quotesWithAttribution++;

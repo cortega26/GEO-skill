@@ -101,6 +101,13 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `tests/integrity.test.js` happy-path test now copies `dist/` to an isolated staging
   directory before importing, matching the pattern used by the other integrity tests.
 - `bin/cli.js` and `tests/badge.test.js` reformatted to Prettier code style.
+- v2 quotation scoring now detects mid-line inline quotes and typographic
+  (" ") quotes, and reads HTML heading hierarchy in document order. Previously
+  mid-line quotes scored the quotation dimension as 0, curly quotes were
+  ignored, and HTML heading order/skip checks were defeated. This changes v2
+  scores on affected content (model patch — see PR for per-fixture deltas).
+- v2 attribution proximity now evaluates each repeated statistic/quote at its
+  own position instead of always the first occurrence.
 
 ### Added
 
