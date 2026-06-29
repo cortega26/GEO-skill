@@ -538,4 +538,86 @@ describe("parseSitemapXml", () => {
     assert.equal(result.valid, false);
     assert.equal(result.urls.length, 0);
   });
+
+  it("extrae múltiples child sitemaps de un sitemapindex", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <sitemap>\n" +
+      "    <loc>https://example.com/sitemap-1.xml</loc>\n" +
+      "  </sitemap>\n" +
+      "  <sitemap>\n" +
+      "    <loc>https://example.com/sitemap-2.xml</loc>\n" +
+      "    <lastmod>2026-06-20</lastmod>\n" +
+      "  </sitemap>\n" +
+      "</sitemapindex>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.sitemapUrls.length, 2);
+    assert.equal(result.urls.length, 0);
+    assert.equal(result.sitemapUrls[0].loc, "https://example.com/sitemap-1.xml");
+    assert.equal(result.sitemapUrls[0].lastmod, null);
+    assert.equal(result.sitemapUrls[1].loc, "https://example.com/sitemap-2.xml");
+    assert.equal(result.sitemapUrls[1].lastmod, "2026-06-20");
+  });
+
+  it("extrae URLs cuando los hijos de <url> están en orden distinto (lastmod antes de loc)", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url>\n" +
+      "    <lastmod>2026-06-15</lastmod>\n" +
+      "    <loc>https://example.com/reversed</loc>\n" +
+      "  </url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 1);
+    assert.equal(result.urls[0].loc, "https://example.com/reversed");
+    assert.equal(result.urls[0].lastmod, "2026-06-15");
+  });
+
+  it("extrae URL envuelta en CDATA dentro de <loc>", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url>\n" +
+      "    <loc><![CDATA[https://example.com/cdata-page]]></loc>\n" +
+      "  </url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 1);
+    assert.equal(result.urls[0].loc, "https://example.com/cdata-page");
+  });
+
+  it("ignora namespaced children (<image:image>) y solo extrae page <loc>", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"\n' +
+      '         xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n' +
+      "  <url>\n" +
+      "    <loc>https://example.com/page-with-image</loc>\n" +
+      "    <image:image>\n" +
+      "      <image:loc>https://example.com/image.jpg</image:loc>\n" +
+      "    </image:image>\n" +
+      "  </url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 1, "Solo la page URL, no la del image:loc");
+    assert.equal(result.urls[0].loc, "https://example.com/page-with-image");
+  });
+
+  it("XML malformado retorna valid:false con issues, sin lanzar", () => {
+    // CDATA no cerrado es rechazado por fast-xml-parser
+    const result = parseSitemapXml(
+      '<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc><![CDATA[unclosed</loc></url></urlset>'
+    );
+    assert.equal(result.valid, false);
+    assert.ok(
+      result.issues.some((i) => i.toLowerCase().includes("parse error")),
+      `Expected parse error, got: ${result.issues.join(", ")}`
+    );
+  });
 });

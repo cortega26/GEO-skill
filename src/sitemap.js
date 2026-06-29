@@ -9,6 +9,7 @@
  */
 
 import fs from "fs";
+import { XMLParser } from "fast-xml-parser";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Constants
@@ -36,6 +37,17 @@ const XML_ESCAPE = {
   '"': "&quot;",
   "'": "&apos;",
 };
+
+/** Shared XML parser for sitemap reading. Safe defaults: DTD/external-entity
+ * resolution is NOT enabled — protected against XXE/billion-laughs.
+ * `processEntities` defaults to `true` but only expands the 5 predefined
+ * XML entities (&amp; &lt; &gt; &quot; &apos;). */
+const SITEMAP_PARSER = new XMLParser({
+  ignoreAttributes: true,
+  trimValues: true,
+  parseTagValue: false,
+  isArray: (name) => name === "url" || name === "sitemap",
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -310,61 +322,54 @@ export function parseSitemapXml(xml) {
   const urls = [];
   const sitemapUrls = [];
 
-  const isUrlset = xml.includes("<urlset");
-  const isSitemapIndex = xml.includes("<sitemapindex");
-
-  if (!isUrlset && !isSitemapIndex) {
-    issues.push("Missing <urlset> or <sitemapindex> root element.");
-    return { urls: [], sitemapUrls: [], valid: false, issues };
+  let tree;
+  try {
+    tree = SITEMAP_PARSER.parse(xml);
+  } catch (e) {
+    return { urls, sitemapUrls, valid: false, issues: [`XML parse error: ${e.message}`] };
   }
 
-  // Extract entries: use a simple regex instead of a full XML parser.
-  // Sitemaps have a controlled, predictable structure; a dedicated XML
-  // parser would add a dependency for negligible gain.
-  const entryRegex = isSitemapIndex
-    ? /<sitemap>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>\s*)?<\/sitemap>/gi
-    : /<url>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>)?[^<]*<\/url>/gi;
+  const urlset = tree?.urlset;
+  const index = tree?.sitemapindex;
+  if (!urlset && !index) {
+    issues.push("Missing <urlset> or <sitemapindex> root element.");
+    return { urls, sitemapUrls, valid: false, issues };
+  }
 
-  let match;
-  while ((match = entryRegex.exec(xml)) !== null) {
-    const loc = match[1].trim();
-    const lastmod = match[2]?.trim() || null;
-
-    try {
-      const parsed = new URL(loc);
-      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-        if (isSitemapIndex) {
-          sitemapUrls.push({ loc, lastmod });
-        } else {
-          urls.push({ loc, lastmod });
+  if (index) {
+    for (const entry of index.sitemap ?? []) {
+      if (entry?.loc) {
+        const loc = String(entry.loc);
+        const lastmod = entry.lastmod ? String(entry.lastmod) : null;
+        try {
+          const parsed = new URL(loc);
+          if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            sitemapUrls.push({ loc, lastmod });
+          } else {
+            issues.push(`Non-http(s) URL skipped: ${loc}`);
+          }
+        } catch {
+          issues.push(`Invalid URL skipped: ${loc}`);
         }
-      } else {
-        issues.push(`Non-http(s) URL skipped: ${loc}`);
       }
-    } catch {
-      issues.push(`Invalid URL skipped: ${loc}`);
     }
   }
 
-  // Fallback: if the structured regex didn't match, try a simpler loc-only
-  // extraction. Some sitemaps omit lastmod inside <url> blocks.
-  if (urls.length === 0 && sitemapUrls.length === 0) {
-    const locRegex = /<loc>([^<]+)<\/loc>/gi;
-    while ((match = locRegex.exec(xml)) !== null) {
-      const loc = match[1].trim();
-      try {
-        const parsed = new URL(loc);
-        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
-          if (isSitemapIndex) {
-            sitemapUrls.push({ loc, lastmod: null });
+  if (urlset) {
+    for (const entry of urlset.url ?? []) {
+      if (entry?.loc) {
+        const loc = String(entry.loc);
+        const lastmod = entry.lastmod ? String(entry.lastmod) : null;
+        try {
+          const parsed = new URL(loc);
+          if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+            urls.push({ loc, lastmod });
           } else {
-            urls.push({ loc, lastmod: null });
+            issues.push(`Non-http(s) URL skipped: ${loc}`);
           }
-        } else {
-          issues.push(`Non-http(s) URL skipped: ${loc}`);
+        } catch {
+          issues.push(`Invalid URL skipped: ${loc}`);
         }
-      } catch {
-        issues.push(`Invalid URL skipped: ${loc}`);
       }
     }
   }
@@ -414,45 +419,52 @@ export function validateSitemapXml(xml) {
     issues.push("Missing required sitemap.org namespace.");
   }
 
-  // For urlset: validate URLs
+  // For urlset: validate structured content via parsed tree
   if (isUrlset) {
-    const locRegex = /<loc>([^<]+)<\/loc>/g;
-    let match;
-    while ((match = locRegex.exec(xml)) !== null) {
-      const url = match[1];
-      try {
-        const parsed = new URL(url);
-        if (!["http:", "https:"].includes(parsed.protocol)) {
-          issues.push(`URL with invalid protocol: ${url}`);
+    let tree;
+    try {
+      tree = SITEMAP_PARSER.parse(xml);
+    } catch {
+      return { valid: false, issues };
+    }
+
+    const entries = tree?.urlset?.url ?? [];
+    for (const entry of entries) {
+      // Validate URL
+      if (entry?.loc) {
+        const url = String(entry.loc);
+        try {
+          const parsed = new URL(url);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            issues.push(`URL with invalid protocol: ${url}`);
+          }
+        } catch {
+          issues.push(`Invalid URL in <loc>: ${url}`);
         }
-      } catch {
-        issues.push(`Invalid URL in <loc>: ${url}`);
       }
-    }
 
-    // Validate changefreq values
-    const cfRegex = /<changefreq>([^<]+)<\/changefreq>/g;
-    while ((match = cfRegex.exec(xml)) !== null) {
-      if (!VALID_CHANGEFREQ.has(match[1])) {
-        issues.push(`Invalid changefreq value: ${match[1]}`);
+      // Validate changefreq
+      if (entry?.changefreq) {
+        const cf = String(entry.changefreq);
+        if (!VALID_CHANGEFREQ.has(cf)) {
+          issues.push(`Invalid changefreq value: ${cf}`);
+        }
       }
-    }
 
-    // Validate priority range
-    const priRegex = /<priority>([^<]+)<\/priority>/g;
-    while ((match = priRegex.exec(xml)) !== null) {
-      const pri = parseFloat(match[1]);
-      if (isNaN(pri) || pri < 0 || pri > 1) {
-        issues.push(`Priority out of range [0.0, 1.0]: ${match[1]}`);
+      // Validate priority
+      if (entry?.priority) {
+        const pri = parseFloat(entry.priority);
+        if (isNaN(pri) || pri < 0 || pri > 1) {
+          issues.push(`Priority out of range [0.0, 1.0]: ${entry.priority}`);
+        }
       }
-    }
 
-    // Validate lastmod format (YYYY-MM-DD)
-    const lmRegex = /<lastmod>([^<]+)<\/lastmod>/g;
-    while ((match = lmRegex.exec(xml)) !== null) {
-      const d = new Date(match[1]);
-      if (isNaN(d.getTime())) {
-        issues.push(`Invalid lastmod date: ${match[1]}`);
+      // Validate lastmod
+      if (entry?.lastmod) {
+        const d = new Date(entry.lastmod);
+        if (isNaN(d.getTime())) {
+          issues.push(`Invalid lastmod date: ${entry.lastmod}`);
+        }
       }
     }
   }

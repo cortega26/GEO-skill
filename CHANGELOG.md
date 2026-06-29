@@ -69,6 +69,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   callers can inspect or suppress it.
 - Extracted shared `buildExplainLines(findings)` helper from the `--explain`
   rendering path (was duplicated in `scoring.js` and `renderer.js`).
+- Sitemap parsing/validation now uses `fast-xml-parser` instead of regex,
+  correctly handling sitemap indexes, attribute/element-order variation,
+  namespaced children, and CDATA (`src/sitemap.js`).
 
 ### Added
 
