@@ -36,6 +36,7 @@
     "format:check": "prettier --check src/ bin/ scripts/ tests/",
     "changelog:check": "node scripts/check-changelog.js",
     "build": "node scripts/build.js",
+    "knip": "knip",
     "typecheck": "tsc -p tsconfig.json",
     "check": "npm run lint && npm run format:check && npm test && npm run test:python && npm run test:conformance && npm run typecheck && npm run changelog:check && npm run validate:package",
     "publint": "publint",
@@ -81,6 +82,7 @@
     "@types/node": "^26.0.1",
     "c8": "^11.0.0",
     "eslint": "^10.5.0",
+    "knip": "^6.23.0",
     "prettier": "^3.8.4",
     "publint": "^0.3.21",
     "semantic-release": "^25.0.5",
@@ -92,6 +94,7 @@
     "commander": "^15.0.0",
     "fast-xml-parser": "^5.9.3",
     "marked": "^18.0.5",
+    "text-readability": "^1.1.1",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   }

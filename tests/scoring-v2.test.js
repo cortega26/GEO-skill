@@ -341,17 +341,16 @@ describe("CLI --model v2", () => {
     assert.ok(result.includes("GEO OPTIMIZATION AUDIT REPORT (v2)"), "Should show v2 header");
   });
 
-  it("v1 remains the default when --model is omitted", () => {
+  it("v2 is the default when --model is omitted", () => {
     const result = execSync("node bin/cli.js audit tests/fixtures/sample.md -f json", {
       encoding: "utf8",
       env: { ...process.env, GEO_OPT_DISABLE_REMINDERS: "1" },
     });
     const report = JSON.parse(result);
-    // v1 report has total_score and breakdown, not readinessBand or profile
-    assert.equal(typeof report.total_score, "number");
-    assert.ok(report.breakdown);
-    // v1 report may or may not have profile info (added in plan 021)
-    // modelVersion is set by findings contract (plan 021); v1 CLI uses current version
+    // v2 report has readinessBand, profile, and dimensions
+    assert.ok(report.readinessBand, "Default should be v2 (profile-aware)");
+    assert.ok(report.profile);
+    assert.ok(report.dimensions);
     assert.ok(report.modelVersion);
   });
 });
@@ -362,7 +361,7 @@ describe("CLI --model v2", () => {
 
 describe("v1 compatibility", () => {
   it("v1 audit path still works and returns 0–100 score", () => {
-    const result = execSync("node bin/cli.js audit tests/fixtures/sample.md -f json", {
+    const result = execSync("node bin/cli.js audit tests/fixtures/sample.md -f json --model v1", {
       encoding: "utf8",
       env: { ...process.env, GEO_OPT_DISABLE_REMINDERS: "1" },
     });
@@ -379,7 +378,7 @@ describe("v1 compatibility", () => {
 
   it("v1 batch audit still works", () => {
     const result = execSync(
-      "node bin/cli.js audit tests/fixtures/sample.md tests/fixtures/audit-v2/editorial/tech-blog.md -f json --summary",
+      "node bin/cli.js audit tests/fixtures/sample.md tests/fixtures/audit-v2/editorial/tech-blog.md -f json --summary --model v1",
       { encoding: "utf8", env: { ...process.env, GEO_OPT_DISABLE_REMINDERS: "1" } }
     );
     const summary = JSON.parse(result);

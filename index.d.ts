@@ -96,9 +96,18 @@ declare module "geo-opt" {
   ): { shown: boolean; reason: string };
 
   // ═══ Text ═══
-  export function calculateReadability(text: string): {
+  export function calculateReadability(
+    text: string,
+    options?: { lang?: string | null }
+  ): {
     wordCount: number;
     avgSentenceLen: number;
+    fleschReadingEase: number | null;
+    fleschKincaidGrade: number | null;
+    gunningFog: number | null;
+    fernandezHuerta: number | null;
+    szigrisztPazos: number | null;
+    readingGradeNote: string | null;
   };
   export function parseFrontmatter(content: string): {
     data: Record<string, unknown>;

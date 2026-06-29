@@ -93,22 +93,7 @@ export const EVIDENCE_LABELS = Object.freeze({
     "A reasonable practice derived from the project's own observations. No external study confirms a causal effect on AI search or retrieval.",
 });
 
-/**
- * @readonly
- * @type {string[]}
- */
 export const VALID_EVIDENCE_LABELS = Object.freeze(Object.keys(EVIDENCE_LABELS));
-
-/**
- * @readonly
- * @type {string[]}
- */
-export const VALID_SOURCE_TYPES = Object.freeze([
-  "paper",
-  "official-doc",
-  "community-proposal",
-  "project-convention",
-]);
 
 /**
  * Validate that every referenced source exists in the registry.

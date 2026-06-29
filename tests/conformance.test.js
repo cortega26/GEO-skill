@@ -30,11 +30,17 @@ const NODE_CLI = path.join(REPO_ROOT, "bin/cli.js");
 /** Run the Node.js CLI and return parsed JSON stdout. */
 function nodeAudit(fixtureName, args = []) {
   const filepath = path.join(FIXTURES, fixtureName);
-  const result = execFileSync("node", [NODE_CLI, "audit", filepath, "--format", "json", ...args], {
-    cwd: REPO_ROOT,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  // Default to v1 for conformance testing against Python's v1 output.
+  // Pass --model v2 to override (Commander takes the last --model value).
+  const result = execFileSync(
+    "node",
+    [NODE_CLI, "audit", filepath, "--format", "json", "--model", "v1", ...args],
+    {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
   return JSON.parse(result);
 }
 

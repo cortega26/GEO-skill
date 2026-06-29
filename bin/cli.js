@@ -66,6 +66,27 @@ function resolveConfig(cmd) {
   }
 }
 
+/**
+ * Resolve and validate the scoring model from CLI options.
+ * v2 is the default since 2026-06-29. v1 is deprecated but still available.
+ */
+function resolveModel(optModel) {
+  const model = (optModel || "v2").toLowerCase();
+  if (!["v1", "v2"].includes(model)) {
+    console.error(`Error: --model must be "v1" or "v2", got "${optModel}".`);
+    process.exit(1);
+  }
+  if (model === "v1") {
+    console.error(
+      chalk.yellow(
+        "Warning: --model v1 is deprecated. v2 is now the default (profile-aware scoring).\n" +
+          "         Use --model v1 only if you need the legacy heuristic scoring model."
+      )
+    );
+  }
+  return model;
+}
+
 const program = new Command();
 
 program
@@ -84,7 +105,11 @@ program
   .option("--ignore <patterns...>", "Additional ignore patterns (gitignore syntax)")
   .option("-s, --summary", "Show aggregate site report (JSON only)")
   .option("--explain", "Show evidence labels and sources alongside findings")
-  .option("-m, --model <version>", "Scoring model: v1 (default) or v2 (profile-aware)", "v1")
+  .option(
+    "-m, --model <version>",
+    "Scoring model: v2 (default, profile-aware) or v1 (legacy)",
+    "v2"
+  )
   .action((files, options, cmd) => {
     const config = resolveConfig(cmd);
 
@@ -103,17 +128,13 @@ program
       process.exit(1);
     }
 
-    const model = options.model || "v1";
-    if (!["v1", "v2"].includes(model)) {
-      console.error(`Error: --model must be "v1" or "v2", got "${model}".`);
-      process.exit(1);
-    }
+    const model = resolveModel(options.model);
 
     // Config-driven model override (config.profile implies v2 compatibility)
     if (model === "v1" && config.profile && config.profile !== "auto") {
       console.error(
         chalk.yellow(
-          `Note: config.profile is set to "${config.profile}". Profile-aware scoring requires --model v2.`
+          `Warning: config.profile is set to "${config.profile}" but --model v1 uses the legacy heuristic model. Profile-aware scoring requires v2. Remove --model v1 or --model v1 from your command.`
         )
       );
     }
@@ -889,7 +910,7 @@ program
       "  Open the output file in a browser; use File > Print > Save as PDF for PDF export."
   )
   .option("-o, --output <file>", "Output HTML file", "geo-report.html")
-  .option("-m, --model <version>", "Scoring model: v1 or v2", "v1")
+  .option("-m, --model <version>", "Scoring model: v2 (default) or v1", "v2")
   .option("-r, --recursive", "Recursively scan directories")
   .option("--ignore <patterns...>", "Additional ignore patterns")
   .option("--compare <file>", "Compare against a previous JSON report (before/after mode)")
@@ -913,11 +934,7 @@ program
       }
     }
 
-    const model = options.model || "v1";
-    if (!["v1", "v2"].includes(model)) {
-      console.error(`Error: --model must be "v1" or "v2", got "${model}".`);
-      process.exit(1);
-    }
+    const model = resolveModel(options.model);
 
     const allowedExts = new Set([".md", ".html", ".htm"]);
     let discovered;
@@ -1006,7 +1023,7 @@ program
   .option("--site-url <url>", "Base URL of the site (e.g. https://example.com)")
   .option("--title <name>", "Site name")
   .option("--description <text>", "Site description")
-  .option("--model <version>", "Audit scoring model (v1 or v2)", "v2")
+  .option("--model <version>", "Audit scoring model: v2 (default) or v1", "v2")
   .option("--strip-prefix <prefix>", "Remove this prefix from generated URLs (e.g. 'src/data')")
   .option("--dry-run", "Preview files without writing to disk")
   .action((dir, options, cmd) => {
@@ -1016,7 +1033,7 @@ program
     const siteUrl = options.siteUrl || config.siteUrl || "";
     const siteTitle = options.title || config.publisher?.name || path.basename(process.cwd());
     const siteDescription = options.description || config.siteDescription || "";
-    const model = options.model === "v2" ? "v2" : "v1";
+    const model = resolveModel(options.model);
 
     // 1. Discover files
     const allowedExts = new Set(
@@ -1720,16 +1737,12 @@ program
   .command("badge <file>")
   .description("Generate a GEO score badge for a content file")
   .option("-f, --format <type>", "Output format: markdown, url, or json", "markdown")
-  .option("-m, --model <version>", "Scoring model: v1 (default) or v2", "v1")
+  .option("-m, --model <version>", "Scoring model: v2 (default) or v1", "v2")
   .option("--label <text>", "Badge label text", "GEO Score")
   .option("--style <style>", "Badge style: flat, flat-square, plastic, social", "flat")
   .action((file, options, cmd) => {
     const config = resolveConfig(cmd);
-    const model = options.model || "v1";
-    if (!["v1", "v2"].includes(model)) {
-      console.error(`Error: --model must be "v1" or "v2", got "${model}".`);
-      process.exit(1);
-    }
+    const model = resolveModel(options.model);
     const validFormats = ["markdown", "url", "json"];
     if (!validFormats.includes(options.format)) {
       console.error(

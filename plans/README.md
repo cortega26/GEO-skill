@@ -111,7 +111,7 @@ AI discoverability — not just a score, but fixes.
 
 | Plan | Type | Outcome | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|
-| [022](022-calibrate-profiled-audit-v2.md) | Program slice | Profile-aware v2 model | P1 | L | T0 done | PARTIAL |
+| [022](022-calibrate-profiled-audit-v2.md) | Program slice | Profile-aware v2 model (default switch: v2 is now default, migration note and deprecation warning added) | P1 | L | T0 done | DONE |
 | [024](archive/024-align-structured-data-semantics.md) | Execution | Accurate structured-data semantics | P1 | M | 030, 031, 034 | DONE |
 | [025](archive/025-harden-llms-artifacts.md) | Execution | Proposal-correct, curated artifacts | P2 | M | 024 | DONE |
 | [023](023-add-technical-discovery-audit.md) | Program slice | Phase 1 + 2 done (CLI technical, parseSitemapXml, remote fetch with SSRF guards per security review 2026-06-28) | P2 | L | T0 | DONE |
@@ -191,8 +191,8 @@ warrants. Short-term items also close monedario.cl audit findings
 | [051](051-yaml-frontmatter-parsing.md) | Parse YAML frontmatter with `yaml` (fixes stats/quotes/heading leakage #4/#5) | `yaml` (runtime) | bug+feature | P1 | M | short | — | DONE |
 | [052](052-fast-xml-parser-sitemap.md) | Parse sitemaps with `fast-xml-parser` (robust index/namespace/CDATA; relates to #2) | `fast-xml-parser` (runtime) | reliability+bug | P2 | M | short | — | DONE |
 | [053](053-package-publish-validation.md) | Validate published package with `publint` + `@arethetypeswrong/cli` in CI | both (dev) | dx/release | P2 | S | short | — | DONE |
-| [054](054-knip-dead-code-detection.md) | Add `knip` for unused file/export/dependency detection (non-blocking first) | `knip` (dev) | dx/tech-debt | P3 | S | medium | — | TODO |
-| [055](055-readability-metrics.md) | Language-gated reading-grade metrics via `text-readability` (decision gate) | `text-readability` (runtime) | feature | P3 | M | medium | — | TODO |
+| [054](054-knip-dead-code-detection.md) | Add `knip` for unused file/export/dependency detection (non-blocking first) | `knip` (dev) | dx/tech-debt | P3 | S | medium | — | DONE |
+| [055](055-readability-metrics.md) | Bilingual reading-grade metrics via `text-readability` + custom Spanish formulas (Fernández-Huerta, Szigriszt-Pazos), gated by `lang` option | `text-readability` (runtime) | feature | P3 | M | medium | — | DONE |
 | [056](056-schema-dts-typed-jsonld.md) | Type JSON-LD output with `schema-dts` (compile-time vocabulary guard) | `schema-dts` (dev/type-only) | tech-debt | P3 | M | long | TS migration | DEFERRED |
 
 Recommended execution order:
@@ -301,8 +301,8 @@ tracking or new Pro epics before G1/G4 gates justify them.
 
 - **022:** corpus, profiles, observations, v2 flag and characterization docs landed.
   Contract normalization, type coverage, orchestration, conformance, and Python
-  scope closed by plans 029–034 (T0 complete 2026-06-27). Remaining: optional
-  v2 default switch decision.
+  scope closed by plans 029–034 (T0 complete 2026-06-27). v2 is now the default
+  scoring model; v1 remains available via `--model v1` (deprecated).
 - **023:** DONE. Pure local HTML observations, CLI `technical`, sitemap parsing,
   remote URL/sitemap audit and `src/fetcher.js` SSRF-guarded network boundary
   landed. Python intentionally has no `technical` subcommand per the capability

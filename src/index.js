@@ -30,6 +30,8 @@ export { renderV1Report, renderV2Report, renderV1Summary, renderV2Summary } from
 export {
   REPORT_VERSION,
   MODEL_VERSION,
+  MODEL_VERSION_V1,
+  MODEL_VERSION_V2,
   createFinding,
   buildReportMeta,
   mapLegacyToFindings,
