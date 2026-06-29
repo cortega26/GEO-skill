@@ -227,6 +227,8 @@ class TestGeoOptimizer(unittest.TestCase):
                 fixture_path,
                 "--format",
                 "json",
+                "--model",
+                "v1",
             ],
             cwd=repo_root,
             capture_output=True,

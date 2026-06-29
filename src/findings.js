@@ -31,11 +31,12 @@ export const MODEL_VERSION_V1 = "2.0.0";
 export const MODEL_VERSION_V2 = "2.1.0";
 
 /**
- * Default scoring model version. v1 remains the default until the migration
- * gate completes. This is the scoring algorithm identity, NOT the package
+ * Default scoring model version. v2 is now the default (profile-aware scoring).
+ * v1 remains available via `--model v1` and the legacy constant
+ * `MODEL_VERSION_V1`. This is the scoring algorithm identity, NOT the package
  * version (`package.json`) nor the report contract version (`REPORT_VERSION`).
  */
-export const MODEL_VERSION = MODEL_VERSION_V1;
+export const MODEL_VERSION = MODEL_VERSION_V2;
 
 /**
  * @typedef {"pass"|"warn"|"fail"|"not_applicable"} FindingStatus

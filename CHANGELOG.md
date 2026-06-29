@@ -7,7 +7,24 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
-### Added
+### Changed
+
+- **v2 is now the default scoring model.** `--model v2` is no longer needed for
+  profile-aware scoring. The legacy v1 model remains available via `--model v1`
+  (deprecated; emits a migration warning). Updated all CLI commands (`audit`,
+  `report`, `badge`, `generate-all`) to default to v2, and the `MODEL_VERSION`
+  constant reflects `"2.1.0"` (`src/findings.js`, `bin/cli.js`).
+  ([Plan 022](plans/022-calibrate-profiled-audit-v2.md))
+- Added `knip` (dev-only) for project-wide unused-file, unused-export, and
+  unused/missing-dependency detection (`npm run knip`). Non-blocking in CI
+  until the baseline is clean.
+  ([Plan 054](plans/054-knip-dead-code-detection.md))
+- `calculateReadability` now reports bilingual reading-grade indices:
+  English (Flesch–Kincaid, Gunning fog via `text-readability`) and Spanish
+  (Fernández-Huerta, Szigriszt-Pazos via a custom Spanish syllable counter),
+  gated by the `lang` option. Non-English/non-Spanish content returns grade
+  fields as `null` with an explanatory note (`src/text.js`).
+  ([Plan 055](plans/055-readability-metrics.md))
 
 - Integrated semantic-release v25 for automatic version management using
   conventional commits: auto-bumps version, generates changelog, publishes

@@ -1,6 +1,122 @@
 import { parse as parseYaml } from "yaml";
 import { marked } from "marked";
 import * as cheerio from "cheerio";
+import rs from "text-readability";
+
+/**
+ * Count syllables in Spanish text using phonetic rules.
+ *
+ * Spanish syllable rules are more regular than English:
+ * - Each vowel group forms a syllable nucleus.
+ * - Diphthongs (ia, ie, io, iu, ua, ue, ui, uo, ai, ei, oi, au, eu, ou)
+ *   count as one syllable unless broken by hiatus.
+ * - Hiatus occurs: two strong vowels (a, e, o) in a row, accented weak
+ *   vowel (í, ú), or identical vowels.
+ * - Triphthongs (iai, iei, uai, uei, etc.) count as one syllable.
+ *
+ * @param {string} text — raw Spanish text
+ * @returns {number} estimated syllable count
+ */
+function countSpanishSyllables(text) {
+  const STRONG = new Set(["a", "e", "o", "á", "é", "ó"]);
+  const ALL_VOWELS = new Set(["a", "e", "i", "o", "u", "á", "é", "í", "ó", "ú", "ü"]);
+  const ACCENTED_WEAK = new Set(["í", "ú"]);
+
+  /** Two consecutive vowels form a hiatus (separate syllables) */
+  function isHiatus(v1, v2) {
+    // Two strong vowels → hiatus
+    if (STRONG.has(v1) && STRONG.has(v2)) return true;
+    // Same vowel repeated → hiatus (always separate in Spanish)
+    if (v1 === v2) return true;
+    // Accented weak vowel breaks diphthong
+    if (ACCENTED_WEAK.has(v1) || ACCENTED_WEAK.has(v2)) return true;
+    return false;
+  }
+
+  const words = text.toLowerCase().match(/[a-záéíóúü]+/gi) || [];
+  let total = 0;
+
+  for (const word of words) {
+    let i = 0;
+    let syll = 0;
+    const chars = [...word]; // handle multi-byte chars
+
+    while (i < chars.length) {
+      if (ALL_VOWELS.has(chars[i])) {
+        syll++;
+        // Look ahead for consecutive vowels (diphthong / triphthong / hiatus)
+        if (i + 1 < chars.length && ALL_VOWELS.has(chars[i + 1])) {
+          // Triphthong candidate (3 consecutive vowels)
+          if (i + 2 < chars.length && ALL_VOWELS.has(chars[i + 2])) {
+            // Check each adjacent pair for hiatus
+            if (isHiatus(chars[i], chars[i + 1]) || isHiatus(chars[i + 1], chars[i + 2])) {
+              // Hiatus within the triplet → count separately
+              // chars[i] was already counted; handle chars[i+1] and chars[i+2]
+              if (isHiatus(chars[i], chars[i + 1])) {
+                i++; // hiatus at i→i+1: i+1 is its own syllable
+                // now check i+1→i+2
+                if (isHiatus(chars[i], chars[i + 1])) {
+                  i++; // also hiatus → separate
+                } else {
+                  i += 2; // diphthong at i+1→i+2
+                }
+              } else {
+                // no hiatus at i→i+1, but hiatus at i+1→i+2
+                i += 2; // i→i+1 is a diphthong, i+2 next syllable
+              }
+            } else {
+              // No hiatus → triphthong (one syllable)
+              i += 3;
+            }
+          } else if (isHiatus(chars[i], chars[i + 1])) {
+            // Diphthong but with hiatus → separate syllables
+            i++; // chars[i] counted, chars[i+1] next iteration
+          } else {
+            // Regular diphthong → one syllable
+            i += 2;
+          }
+        } else {
+          i++;
+        }
+      } else {
+        i++;
+      }
+    }
+    total += Math.max(1, syll);
+  }
+  return total;
+}
+
+/**
+ * Fernández-Huerta readability score for Spanish text.
+ * Adaptation of Flesch Reading Ease for Spanish (1959).
+ *
+ * Formula: 206.84 − 1.02 × (words/sentences) − 60.0 × (syllables/words)
+ *
+ * @param {number} wordCount
+ * @param {number} sentenceCount
+ * @param {number} syllableCount
+ * @returns {number}
+ */
+function fernandezHuerta(wordCount, sentenceCount, syllableCount) {
+  if (sentenceCount === 0 || wordCount === 0) return 0;
+  return 206.84 - 1.02 * (wordCount / sentenceCount) - 60.0 * (syllableCount / wordCount);
+}
+
+/**
+ * Szigriszt-Pazos perspicuity index for Spanish text (1993).
+ *
+ * Formula: 207 − 62.3 × (syllables/words) − (words/sentences)
+ *
+ * @param {number} wordCount
+ * @param {number} sentenceCount
+ * @param {number} syllableCount
+ * @returns {number}
+ */
+function szigrisztPazos(wordCount, sentenceCount, syllableCount) {
+  if (sentenceCount === 0 || wordCount === 0) return 0;
+  return 207 - 62.3 * (syllableCount / wordCount) - wordCount / sentenceCount;
+}
 
 export function cleanHtmlText(value) {
   const $ = cheerio.load(value);
@@ -79,7 +195,7 @@ export function extractHtmlVisibleText(rawHtml) {
   };
 }
 
-export function calculateReadability(text) {
+export function calculateReadability(text, { lang = null } = {}) {
   const sentences = text
     .split(/[.!?]+/)
     .map((s) => s.trim())
@@ -87,12 +203,64 @@ export function calculateReadability(text) {
   const words = text.match(/\b\w+\b/g) || [];
 
   if (sentences.length === 0 || words.length === 0) {
-    return { wordCount: 0, avgSentenceLen: 0 };
+    return {
+      wordCount: 0,
+      avgSentenceLen: 0,
+      fleschReadingEase: null,
+      fleschKincaidGrade: null,
+      gunningFog: null,
+      fernandezHuerta: null,
+      szigrisztPazos: null,
+      readingGradeNote: null,
+    };
   }
 
-  return {
+  const base = {
     wordCount: words.length,
     avgSentenceLen: words.length / sentences.length,
+  };
+
+  const isEnglish = lang ? /^en(-|$)/i.test(lang) : false;
+  const isSpanish = lang ? /^es(-|$)/i.test(lang) : false;
+
+  if (isEnglish) {
+    const fullText = words.join(" ");
+    return {
+      ...base,
+      fleschReadingEase: rs.fleschReadingEase(fullText),
+      fleschKincaidGrade: rs.fleschKincaidGrade(fullText),
+      gunningFog: rs.gunningFog(fullText),
+      fernandezHuerta: null,
+      szigrisztPazos: null,
+      readingGradeNote: null,
+    };
+  }
+
+  if (isSpanish) {
+    const fullText = words.join(" ");
+    const syllableCount = countSpanishSyllables(fullText);
+    return {
+      ...base,
+      fleschReadingEase: null,
+      fleschKincaidGrade: null,
+      gunningFog: null,
+      fernandezHuerta: fernandezHuerta(words.length, sentences.length, syllableCount),
+      szigrisztPazos: szigrisztPazos(words.length, sentences.length, syllableCount),
+      readingGradeNote: null,
+    };
+  }
+
+  // Unknown language — return base metrics without grade indices
+  return {
+    ...base,
+    fleschReadingEase: null,
+    fleschKincaidGrade: null,
+    gunningFog: null,
+    fernandezHuerta: null,
+    szigrisztPazos: null,
+    readingGradeNote: lang
+      ? "Reading-grade indices are not available for the detected language."
+      : "Language unknown; reading-grade indices omitted. Pass 'lang' (e.g. 'en' or 'es') to enable them.",
   };
 }
 

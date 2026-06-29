@@ -32,6 +32,7 @@ import {
   injectSchema,
   loadConfig,
   MODEL_VERSION,
+  MODEL_VERSION_V1,
   parseFrontmatter,
   preprocessContent,
   isHtmlContent,
@@ -88,6 +89,60 @@ test("calculateReadability parses word counts and sentence averages", () => {
   const res = calculateReadability(text);
   assert.strictEqual(res.wordCount, 12);
   assert.strictEqual(res.avgSentenceLen, 6);
+  // New optional fields default to null when lang is not set
+  assert.strictEqual(res.fleschReadingEase, null);
+  assert.strictEqual(res.fleschKincaidGrade, null);
+  assert.strictEqual(res.gunningFog, null);
+  assert.strictEqual(res.fernandezHuerta, null);
+  assert.strictEqual(res.szigrisztPazos, null);
+  assert.ok(res.readingGradeNote);
+});
+
+test("calculateReadability returns English grade indices for lang=en", () => {
+  const text =
+    "The quick brown fox jumps over the lazy dog. This is a simple sentence for testing readability metrics here.";
+  const res = calculateReadability(text, { lang: "en" });
+  assert.strictEqual(res.wordCount, 19);
+  assert.strictEqual(typeof res.fleschReadingEase, "number");
+  assert.strictEqual(typeof res.fleschKincaidGrade, "number");
+  assert.strictEqual(typeof res.gunningFog, "number");
+  assert.strictEqual(res.fernandezHuerta, null);
+  assert.strictEqual(res.szigrisztPazos, null);
+  assert.strictEqual(res.readingGradeNote, null);
+});
+
+test("calculateReadability returns Spanish grade indices for lang=es", () => {
+  const text =
+    "El zorro marrón salta sobre el perro perezoso. Esta es una frase sencilla para probar las métricas de legibilidad aquí.";
+  const res = calculateReadability(text, { lang: "es" });
+  assert.strictEqual(res.wordCount, 22);
+  assert.strictEqual(typeof res.fernandezHuerta, "number");
+  assert.strictEqual(typeof res.szigrisztPazos, "number");
+  assert.strictEqual(res.fleschReadingEase, null);
+  assert.strictEqual(res.fleschKincaidGrade, null);
+  assert.strictEqual(res.gunningFog, null);
+  assert.strictEqual(res.readingGradeNote, null);
+});
+
+test("calculateReadability omits grade indices for unknown lang", () => {
+  const text = "This is a test. Another sentence here.";
+  const res = calculateReadability(text, { lang: "fr" });
+  assert.strictEqual(res.wordCount, 7);
+  assert.strictEqual(res.fleschReadingEase, null);
+  assert.strictEqual(res.fleschKincaidGrade, null);
+  assert.strictEqual(res.gunningFog, null);
+  assert.strictEqual(res.fernandezHuerta, null);
+  assert.strictEqual(res.szigrisztPazos, null);
+  assert.ok(res.readingGradeNote);
+});
+
+test("calculateReadability handles empty text with grade fields", () => {
+  const res = calculateReadability("", { lang: "en" });
+  assert.strictEqual(res.wordCount, 0);
+  assert.strictEqual(res.avgSentenceLen, 0);
+  assert.strictEqual(res.fleschReadingEase, null);
+  assert.strictEqual(res.fernandezHuerta, null);
+  assert.strictEqual(res.readingGradeNote, null);
 });
 
 test("cleanMarkdownToPlainText converts tables and links to plain text", () => {
@@ -1420,7 +1475,7 @@ test("CLI audit --recursive finds files in directory", () => {
     );
     const result = spawnSync(
       process.execPath,
-      [cliPath, "audit", tmpDir, "--recursive", "--format", "json"],
+      [cliPath, "audit", tmpDir, "--recursive", "--format", "json", "--model", "v1"],
       { cwd: repoRoot, encoding: "utf8" }
     );
     assert.strictEqual(result.status, 0, result.stderr);
@@ -2172,7 +2227,7 @@ test("scoreContent report preserves legacy scores with additive findings", () =>
   assert.ok(typeof report.breakdown.structure.score === "number");
   // New additive fields
   assert.ok(report.reportVersion === REPORT_VERSION);
-  assert.ok(report.modelVersion === MODEL_VERSION);
+  assert.ok(report.modelVersion === MODEL_VERSION_V1);
   assert.ok(typeof report.generatedAt === "string");
   // ISO 8601 timestamp
   assert.ok(!isNaN(Date.parse(report.generatedAt)));
@@ -2282,10 +2337,14 @@ test("CLI audit --explain shows evidence labels in text output", () => {
   try {
     const testFile = path.join(tmpDir, "test.md");
     fs.writeFileSync(testFile, "# Test\n\nShort.\n\n## Section\n\nContent.");
-    const result = spawnSync(process.execPath, [cliPath, "audit", testFile, "--explain"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-    });
+    const result = spawnSync(
+      process.execPath,
+      [cliPath, "audit", testFile, "--model", "v1", "--explain"],
+      {
+        cwd: repoRoot,
+        encoding: "utf8",
+      }
+    );
     assert.strictEqual(result.status, 0, result.stderr);
     // --explain output should include the evidence header
     assert.ok(

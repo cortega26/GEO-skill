@@ -4,7 +4,7 @@ import { marked } from "marked";
 import chalk from "chalk";
 import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
 import { MAX_PRONOUN_DENSITY } from "./config.js";
-import { mapLegacyToFindings, buildReportMeta } from "./findings.js";
+import { mapLegacyToFindings, buildReportMeta, MODEL_VERSION_V1 } from "./findings.js";
 import { buildExplainLines } from "./renderer.js";
 
 const VERBAL_STATS_PATTERNS = [
@@ -464,7 +464,7 @@ export function scoreContent(content, filepath, config) {
     pronounLimit: observedPronounLimit,
     unexplainedAcronyms: observedUnexplainedAcronyms,
   });
-  const meta = buildReportMeta();
+  const meta = buildReportMeta(MODEL_VERSION_V1);
 
   const recs = [];
   if (structScore < 15) {
