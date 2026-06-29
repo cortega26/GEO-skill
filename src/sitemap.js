@@ -282,6 +282,105 @@ export function generateSitemapFiles(entries, options = {}) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Sitemap parsing (read existing sitemaps)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Parse a sitemap XML string and extract the listed URLs.
+ *
+ * Handles both `<urlset>` (standard sitemap) and `<sitemapindex>`
+ * (sitemap index pointing to sub-sitemaps). For sitemap indexes, the
+ * child sitemap loc values are returned as `sitemapUrls` so the caller
+ * can decide whether to fetch them.
+ *
+ * Validation is best-effort: invalid or non-http(s) URLs are collected
+ * as issues rather than causing the parse to fail. The caller should
+ * inspect `valid` and `issues` before acting on the URL list.
+ *
+ * @param {string} xml - sitemap XML content
+ * @returns {{
+ *   urls: Array<{loc: string, lastmod: string|null}>,
+ *   sitemapUrls: Array<{loc: string, lastmod: string|null}>,
+ *   valid: boolean,
+ *   issues: string[]
+ * }}
+ */
+export function parseSitemapXml(xml) {
+  const issues = [];
+  const urls = [];
+  const sitemapUrls = [];
+
+  const isUrlset = xml.includes("<urlset");
+  const isSitemapIndex = xml.includes("<sitemapindex");
+
+  if (!isUrlset && !isSitemapIndex) {
+    issues.push("Missing <urlset> or <sitemapindex> root element.");
+    return { urls: [], sitemapUrls: [], valid: false, issues };
+  }
+
+  // Extract entries: use a simple regex instead of a full XML parser.
+  // Sitemaps have a controlled, predictable structure; a dedicated XML
+  // parser would add a dependency for negligible gain.
+  const entryRegex = isSitemapIndex
+    ? /<sitemap>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>\s*)?<\/sitemap>/gi
+    : /<url>\s*<loc>([^<]+)<\/loc>\s*(?:<lastmod>([^<]+)<\/lastmod>)?[^<]*<\/url>/gi;
+
+  let match;
+  while ((match = entryRegex.exec(xml)) !== null) {
+    const loc = match[1].trim();
+    const lastmod = match[2]?.trim() || null;
+
+    try {
+      const parsed = new URL(loc);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        if (isSitemapIndex) {
+          sitemapUrls.push({ loc, lastmod });
+        } else {
+          urls.push({ loc, lastmod });
+        }
+      } else {
+        issues.push(`Non-http(s) URL skipped: ${loc}`);
+      }
+    } catch {
+      issues.push(`Invalid URL skipped: ${loc}`);
+    }
+  }
+
+  // Fallback: if the structured regex didn't match, try a simpler loc-only
+  // extraction. Some sitemaps omit lastmod inside <url> blocks.
+  if (urls.length === 0 && sitemapUrls.length === 0) {
+    const locRegex = /<loc>([^<]+)<\/loc>/gi;
+    while ((match = locRegex.exec(xml)) !== null) {
+      const loc = match[1].trim();
+      try {
+        const parsed = new URL(loc);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          if (isSitemapIndex) {
+            sitemapUrls.push({ loc, lastmod: null });
+          } else {
+            urls.push({ loc, lastmod: null });
+          }
+        } else {
+          issues.push(`Non-http(s) URL skipped: ${loc}`);
+        }
+      } catch {
+        issues.push(`Invalid URL skipped: ${loc}`);
+      }
+    }
+  }
+
+  if (urls.length === 0 && sitemapUrls.length === 0) {
+    issues.push("No valid http(s) URLs found in sitemap.");
+  }
+
+  if (urls.length > MAX_URLS_PER_SITEMAP) {
+    issues.push(`Sitemap contains ${urls.length} URLs (spec limit: ${MAX_URLS_PER_SITEMAP}).`);
+  }
+
+  return { urls, sitemapUrls, valid: issues.length === 0, issues };
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Spec compliance validation
 // ═══════════════════════════════════════════════════════════════════════════
 

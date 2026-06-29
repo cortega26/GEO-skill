@@ -86,6 +86,7 @@ export {
 export {
   generateSitemapXml,
   generateSitemapFiles,
+  parseSitemapXml,
   validateSitemapXml,
   scoreToPriority,
   determineChangefreq,

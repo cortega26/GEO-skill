@@ -692,3 +692,130 @@ describe("CLI error paths", () => {
     assert.ok(typeof parsed.total_score === "number" || typeof parsed.effectiveScore === "number");
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Technical audit
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("CLI technical", () => {
+  const htmlFixture = "tests/fixtures/technical/valid-static.html";
+
+  it("text output exits 0 para archivo HTML local", () => {
+    const { status, stdout } = run(["technical", htmlFixture]);
+    assert.equal(status, 0);
+    assert.ok(stdout.includes("TECHNICAL AUDIT"), "Debería mostrar reporte técnico");
+    assert.ok(stdout.includes("Findings"), "Debería listar findings");
+  });
+
+  it("--format json exits 0 y produce JSON con observaciones", () => {
+    const { status, stdout } = run(["technical", htmlFixture, "--format", "json"]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(typeof parsed.observations, "object");
+    assert.ok(Array.isArray(parsed.findings), "findings debe ser array");
+    assert.ok(parsed.observations.title, "debe tener observaciones de título");
+  });
+
+  it("--source-url válido resuelve links relativos", () => {
+    const { status, stdout } = run([
+      "technical",
+      htmlFixture,
+      "--source-url",
+      "https://example.com",
+      "--format",
+      "json",
+    ]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.target, "https://example.com");
+    assert.ok(parsed.observations.links.internalCount >= 0);
+  });
+
+  it("rechaza --source-url relativo", () => {
+    const { status, stderr } = run(["technical", htmlFixture, "--source-url", "/relative"]);
+    assert.notEqual(status, 0);
+    assert.ok(
+      stderr.includes("absolute") || stderr.includes("source-url"),
+      "Debería rechazar URL relativo"
+    );
+  });
+
+  it("rechaza --format inválido", () => {
+    const { status, stderr } = run(["technical", htmlFixture, "--format", "xml"]);
+    assert.notEqual(status, 0);
+    assert.ok(
+      stderr.includes("format") || stderr.includes("text") || stderr.includes("json"),
+      "Debería rechazar formato inválido"
+    );
+  });
+
+  it("error si no se pasan archivos", () => {
+    const { status, stderr } = run(["technical"]);
+    assert.notEqual(status, 0);
+    assert.ok(stderr.includes("Missing") || stderr.includes("file"), "Debería pedir archivos");
+  });
+
+  it("error si archivo no existe", () => {
+    const { status, stderr } = run(["technical", "no-existe.html"]);
+    assert.notEqual(status, 0);
+    assert.ok(
+      stderr.includes("Error") || stderr.includes("no-existe"),
+      "Debería reportar archivo faltante"
+    );
+  });
+
+  it("--output escribe reporte JSON a archivo", () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), "geo-opt-cli-tech-"));
+    const outFile = join(tmpDir, "report.json");
+    try {
+      const { status } = run(["technical", htmlFixture, "--format", "json", "--output", outFile]);
+      assert.equal(status, 0);
+      assert.ok(existsSync(outFile), "Debe crear archivo de salida");
+      const raw = readFileSync(outFile, "utf8");
+      const parsed = JSON.parse(raw);
+      assert.ok(parsed.observations, "Debe ser JSON de reporte válido");
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("audita múltiples archivos con --format json (array)", () => {
+    const { status, stdout } = run([
+      "technical",
+      htmlFixture,
+      "tests/fixtures/technical/noindex.html",
+      "--format",
+      "json",
+    ]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.ok(Array.isArray(parsed), "Múltiples archivos deben retornar array");
+    assert.equal(parsed.length, 2);
+    assert.equal(parsed[0].file, htmlFixture);
+    assert.equal(parsed[1].file, "tests/fixtures/technical/noindex.html");
+  });
+
+  it("detecta noindex en archivo con meta robots", () => {
+    const { status, stdout } = run([
+      "technical",
+      "tests/fixtures/technical/noindex.html",
+      "--format",
+      "json",
+    ]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.observations.robots.noindex, true);
+  });
+
+  it("detecta app shell en archivo vacío con scripts", () => {
+    const { status, stdout } = run([
+      "technical",
+      "tests/fixtures/technical/empty-app-shell.html",
+      "--format",
+      "json",
+    ]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.observations.appShell.detected, true);
+  });
+});

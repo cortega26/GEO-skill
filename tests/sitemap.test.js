@@ -19,6 +19,7 @@ import { join } from "node:path";
 import {
   generateSitemapXml,
   generateSitemapFiles,
+  parseSitemapXml,
   scoreToPriority,
   determineChangefreq,
   validateSitemapXml,
@@ -393,5 +394,148 @@ describe("validateSitemapXml", () => {
       result.issues.some((i) => i.toLowerCase().includes("namespace")),
       `Expected namespace issue, got: ${result.issues.join(", ")}`
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// parseSitemapXml
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("parseSitemapXml", () => {
+  it("extrae URLs de un urlset válido", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url>\n" +
+      "    <loc>https://example.com/</loc>\n" +
+      "    <lastmod>2026-06-15</lastmod>\n" +
+      "  </url>\n" +
+      "  <url>\n" +
+      "    <loc>https://example.com/about</loc>\n" +
+      "  </url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 2);
+    assert.equal(result.sitemapUrls.length, 0);
+    assert.equal(result.urls[0].loc, "https://example.com/");
+    assert.equal(result.urls[0].lastmod, "2026-06-15");
+    assert.equal(result.urls[1].loc, "https://example.com/about");
+    assert.equal(result.urls[1].lastmod, null);
+  });
+
+  it("extrae sitemapUrls de un sitemap index", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <sitemap>\n" +
+      "    <loc>https://example.com/sitemap-1.xml</loc>\n" +
+      "    <lastmod>2026-06-20</lastmod>\n" +
+      "  </sitemap>\n" +
+      "  <sitemap>\n" +
+      "    <loc>https://example.com/sitemap-2.xml</loc>\n" +
+      "  </sitemap>\n" +
+      "</sitemapindex>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 0);
+    assert.equal(result.sitemapUrls.length, 2);
+    assert.equal(result.sitemapUrls[0].loc, "https://example.com/sitemap-1.xml");
+    assert.equal(result.sitemapUrls[0].lastmod, "2026-06-20");
+    assert.equal(result.sitemapUrls[1].loc, "https://example.com/sitemap-2.xml");
+    assert.equal(result.sitemapUrls[1].lastmod, null);
+  });
+
+  it("omite URLs no http(s) y las reporta como issues", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url><loc>https://example.com/</loc></url>\n" +
+      "  <url><loc>ftp://example.com/broken</loc></url>\n" +
+      "  <url><loc>javascript:void(0)</loc></url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, false);
+    assert.equal(result.urls.length, 1);
+    assert.equal(result.urls[0].loc, "https://example.com/");
+    // Both non-http URLs should appear in issues
+    const issueText = result.issues.join(" ").toLowerCase();
+    assert.ok(
+      issueText.includes("ftp") || issueText.includes("non-http"),
+      "ftp URL should be flagged"
+    );
+    assert.ok(
+      issueText.includes("javascript") ||
+        issueText.includes("non-http") ||
+        issueText.includes("invalid"),
+      `javascript URL should be flagged, got: ${result.issues.join(", ")}`
+    );
+  });
+
+  it("retorna valid:false y urls vacíos para contenido sin urlset/sitemapindex", () => {
+    const xml = "<root><item>not a sitemap</item></root>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, false);
+    assert.equal(result.urls.length, 0);
+    assert.equal(result.sitemapUrls.length, 0);
+    assert.ok(
+      result.issues.some((i) => i.toLowerCase().includes("missing")),
+      `Expected missing root element issue, got: ${result.issues.join(", ")}`
+    );
+  });
+
+  it("retorna vacío y con issue para sitemap sin URLs válidas", () => {
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url><loc>ftp://bad-protocol/</loc></url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, false);
+    assert.equal(result.urls.length, 0);
+    assert.ok(
+      result.issues.some((i) => i.toLowerCase().includes("no valid")),
+      `Expected 'no valid http(s) URLs' issue, got: ${result.issues.join(", ")}`
+    );
+  });
+
+  it("usa fallback loc-only cuando el regex estructurado no captura", () => {
+    // Sitemaps where <lastmod> is not on the same <url> line
+    const xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      "  <url>\n" +
+      "    <loc>https://example.com/page</loc>\n" +
+      "    <changefreq>weekly</changefreq>\n" +
+      "    <priority>0.8</priority>\n" +
+      "  </url>\n" +
+      "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.valid, true);
+    assert.equal(result.urls.length, 1);
+    assert.equal(result.urls[0].loc, "https://example.com/page");
+  });
+
+  it("no advierte cuando el sitemap está bajo el límite de 50 000 URLs", () => {
+    let xml =
+      '<?xml version="1.0" encoding="UTF-8"?>\n' +
+      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n';
+    for (let i = 0; i < 100; i++) {
+      xml += `  <url><loc>https://example.com/page-${i}</loc></url>\n`;
+    }
+    xml += "</urlset>";
+    const result = parseSitemapXml(xml);
+    assert.equal(result.urls.length, 100);
+    assert.equal(result.valid, true);
+    assert.ok(
+      !result.issues.some((i) => i.toLowerCase().includes("50000")),
+      "No debe advertir sobre el límite con solo 100 URLs"
+    );
+  });
+
+  it("maneja sitemap XML malformado sin crashear", () => {
+    const result = parseSitemapXml("not xml at all <<<>>>");
+    assert.equal(result.valid, false);
+    assert.equal(result.urls.length, 0);
   });
 });

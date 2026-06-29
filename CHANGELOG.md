@@ -60,6 +60,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   `{ errors, warnings, notes, nodes }` without any I/O or side effects.
 - `index.d.ts`: `SchemaValidationResult` interface and `validateSchema` export.
 - `REQUIRED_FIELDS` in `validate.js` now includes `Article: ["headline"]`.
+- New CLI command `geo-opt technical [files...]`: runs a pure local HTML technical
+  audit on one or more HTML files. Checks title, canonical URLs, meta robots
+  directives, heading hierarchy, hreflang declarations, link validity,
+  structured-data consistency and app-shell detection. Supports `--format`
+  (text|json), `--source-url` and `--output`. No network access.
+- `parseSitemapXml(xml)`: new pure function in `src/sitemap.js` that parses an
+  existing sitemap XML string (urlset or sitemapindex) into a structured
+  `{ urls, sitemapUrls, valid, issues }` result. Exported from `src/index.js`
+  and typed in `index.d.ts`. No network access — parsing only.
 
 ### Docs
 

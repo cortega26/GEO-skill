@@ -872,6 +872,20 @@ declare module "geo-opt" {
     options?: { baseUrl?: string }
   ): Array<{ name: string; content: string }>;
 
+  export interface ParsedSitemapUrl {
+    loc: string;
+    lastmod: string | null;
+  }
+
+  export interface ParsedSitemap {
+    urls: ParsedSitemapUrl[];
+    sitemapUrls: ParsedSitemapUrl[];
+    valid: boolean;
+    issues: string[];
+  }
+
+  export function parseSitemapXml(xml: string): ParsedSitemap;
+
   // ═══ Badge ═══
   export type BadgeColor = "brightgreen" | "green" | "yellow" | "orange" | "red";
   export type BadgeGrade = "A" | "B" | "C" | "D" | "F";

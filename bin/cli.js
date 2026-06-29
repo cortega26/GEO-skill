@@ -8,6 +8,7 @@ import {
   aggregateReport,
   auditContent,
   auditLlmsTxt,
+  auditTechnicalHtml,
   batchInject,
   assertNewFileParentInsideCwd,
   assertWritableTargetInsideCwd,
@@ -1159,6 +1160,162 @@ program
           console.log(`   • ${issue.message} (${issue.fileCount} files)`);
         }
       }
+    }
+  });
+
+// --- Technical: audit HTML for technical SEO/GEO fundamentals ---
+program
+  .command("technical [files...]")
+  .description(
+    "Audit HTML files for technical SEO/GEO fundamentals.\n" +
+      "  Checks: title, canonical, meta robots, headings, hreflang,\n" +
+      "  links, structured data consistency, and app-shell detection.\n" +
+      "  Local files only — no network requests."
+  )
+  .option("--source-url <url>", "Base URL for resolving relative links in local HTML")
+  .option("-f, --format <type>", "Output format: text or json", "text")
+  .option("-o, --output <file>", "Write JSON report to file (json format only)")
+  .action((files, options, cmd) => {
+    resolveConfig(cmd);
+
+    if (!files || files.length === 0) {
+      console.error("Error: Missing file path(s) for technical audit.");
+      process.exit(1);
+    }
+
+    if (!["text", "json"].includes(options.format)) {
+      console.error(`Error: --format must be "text" or "json", got "${options.format}".`);
+      process.exit(1);
+    }
+
+    if (options.sourceUrl && !/^https?:\/\//i.test(options.sourceUrl)) {
+      console.error("Error: --source-url must be an absolute http(s) URL.");
+      process.exit(1);
+    }
+
+    const results = [];
+    for (const file of files) {
+      let html;
+      try {
+        html = fs.readFileSync(file, { encoding: "utf8" });
+      } catch (e) {
+        results.push({ file, status: "error", error: `Read failed: ${e.message}` });
+        continue;
+      }
+      try {
+        const report = auditTechnicalHtml(html, { sourceUrl: options.sourceUrl || null });
+        results.push({ file, status: "success", ...report });
+      } catch (e) {
+        results.push({ file, status: "error", error: e.message });
+      }
+    }
+
+    if (options.format === "json") {
+      const payload = results.length === 1 ? results[0] : results;
+      const output = JSON.stringify(payload, null, 2);
+      if (options.output) {
+        const outPath = path.resolve(options.output);
+        try {
+          fs.writeFileSync(outPath, output, { encoding: "utf8" });
+        } catch (e) {
+          console.error(`Error: Failed to write ${outPath}: ${e.message}`);
+          process.exit(1);
+        }
+        console.log(`✓ Technical audit report written → ${path.relative(process.cwd(), outPath)}`);
+      } else {
+        console.log(output);
+      }
+    } else {
+      // Text output
+      for (const r of results) {
+        if (r.status === "error") {
+          console.error(`\nError auditing ${r.file}: ${r.error}`);
+          continue;
+        }
+        console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
+        console.log(chalk.bold.blue("            TECHNICAL AUDIT REPORT                "));
+        console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
+        console.log(chalk.bold(`File:   ${r.file}`));
+        console.log(chalk.dim(`Target: ${r.target ?? "(none — local file)"}`));
+        console.log(chalk.bold.blue("──────────────────────────────────────────────────"));
+
+        if (r.findings && r.findings.length > 0) {
+          console.log(chalk.bold(`\nFindings (${r.findings.length}):\n`));
+          for (const f of r.findings) {
+            const icon =
+              f.status === "pass"
+                ? chalk.green("✓")
+                : f.status === "warn"
+                  ? chalk.yellow("⚠")
+                  : chalk.red("✗");
+            console.log(`  ${icon} [${f.ruleId}] ${f.message}`);
+            if (f.remediation) {
+              console.log(chalk.dim(`     Fix: ${f.remediation}`));
+            }
+          }
+        } else {
+          console.log(chalk.green("\nNo issues found."));
+        }
+
+        if (r.observations) {
+          console.log(chalk.bold.blue("\n──────────────────────────────────────────────────"));
+          console.log(chalk.bold("Observations:"));
+          const obs = r.observations;
+          console.log(chalk.dim(`  Title:          ${obs.title?.values?.join(", ") || "(none)"}`));
+          console.log(
+            chalk.dim(
+              `  Visible words:  ${obs.visibleText?.wordCount ?? 0} (min: ${obs.visibleText?.minimumWords ?? 20})`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  Canonical:      ${obs.canonical?.count ?? 0} URL(s)${obs.canonical?.conflicts ? " ⚠ conflicts" : ""}`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  Meta robots:    noindex=${obs.robots?.noindex ?? false}, nofollow=${obs.robots?.nofollow ?? false}`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  Headings:       ${obs.headings?.values?.length ?? 0} (issues: ${obs.headings?.issues?.join(", ") || "none"})`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  Language:       ${obs.language?.documentLanguage || "(not set)"} (hreflang: ${obs.language?.hreflang?.length ?? 0})`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  Links:          ${obs.links?.values?.length ?? 0} total, ${obs.links?.internalCount ?? 0} internal, ${obs.links?.invalidCount ?? 0} invalid`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  StructuredData: ${obs.structuredData?.blockCount ?? 0} blocks, ${obs.structuredData?.invalidBlocks?.length ?? 0} invalid`
+            )
+          );
+          console.log(
+            chalk.dim(
+              `  App shell:      ${obs.appShell?.detected ? "⚠ detected" : "not detected"} (scripts: ${obs.appShell?.scriptCount ?? 0})`
+            )
+          );
+        }
+
+        console.log(chalk.bold.blue("══════════════════════════════════════════════════\n"));
+      }
+
+      // Summary line
+      const succeeded = results.filter((r) => r.status !== "error").length;
+      const failed = results.filter((r) => r.status === "error").length;
+      if (results.length > 1) {
+        const summary = `${succeeded} file(s) audited` + (failed > 0 ? `, ${failed} failed` : "");
+        console.log(chalk.dim(summary));
+      }
+
+      if (failed > 0) process.exit(1);
     }
   });
 
