@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/cortega26/geo-opt/discussions
+    about: Ask questions and discuss geo-opt here
+  - name: Security vulnerability
+    url: https://github.com/cortega26/geo-opt/security/advisories/new
+    about: Report a security issue privately

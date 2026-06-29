@@ -1,0 +1,53 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have an idea to improve geo-opt? Describe it below.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of geo-opt does this affect?
+      options:
+        - Scoring / audit logic
+        - JSON-LD generation
+        - robots.txt generation
+        - llms.txt generation
+        - CLI flags / UX
+        - GitHub Action
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What problem does this solve? What's the current limitation?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature or change you'd like to see
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other approaches you've thought about?
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Examples, mockups, or related issues

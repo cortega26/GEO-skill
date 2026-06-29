@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - master
 
 permissions:
   contents: read
@@ -71,6 +70,5 @@ jobs:
       - name: Dogfood — audit own documentation
         run: node bin/cli.js audit docs/ --recursive --threshold 50
 
-      - name: Security audit (advisory only)
-        run: npm audit --audit-level=high || true
-        continue-on-error: true
+      - name: Security audit
+        run: npm audit --audit-level=high
