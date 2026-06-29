@@ -71,6 +71,7 @@ export {
   CRAWLER_REGISTRY_VERSION,
   auditRobots,
   checkRobots,
+  parseRobotsGroups,
 } from "./robots.js";
 export { validateSchema, validateSchemaFile } from "./validate.js";
 export {
@@ -103,3 +104,14 @@ export {
   generateBadgeUrl,
   generateBadgeMarkdown,
 } from "./badge.js";
+export {
+  fetchUrl,
+  fetchRobotsTxt,
+  checkRobotsRule,
+  clearRobotsCache,
+  USER_AGENT as FETCHER_USER_AGENT,
+  RESPONSE_TIMEOUT_MS,
+  TOTAL_TIMEOUT_MS,
+  MAX_RESPONSE_SIZE,
+  MAX_REDIRECTS,
+} from "./fetcher.js";

@@ -7,6 +7,26 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+
+- `geo-opt technical` now supports remote URL auditing via `--url` and `--sitemap` flags
+  (Phase 2 of plan 023). Remote fetching includes DNS rebinding mitigation, private-IP
+  blocking (with `--allow-private` and `--allow-localhost` overrides), configurable
+  timeouts (`--timeout`), response-size limits (`--max-size`), robots.txt integration
+  (`--no-robots` to disable), and per-host/global rate limiting.
+- `src/fetcher.js`: new module for network access with SSRF guards — the single
+  entry point for all outbound HTTP requests. Uses only Node.js built-in modules.
+- `fetchUrl(url, options)` — public API for fetching remote HTML with IP validation,
+  DNS rebinding protection (connect to resolved IP, send original Host header),
+  redirect tracking with per-hop SSRF re-validation, and timeout/size controls.
+- `fetchRobotsTxt(origin, options)` — fetches and parses robots.txt for an origin
+  with in-memory caching. Reuses `parseRobotsGroups` from `src/robots.js`.
+- `checkRobotsRule(url, groups, userAgent)` — evaluates a URL against parsed
+  robots.txt group rules.
+- `parseRobotsGroups` is now a public export from `src/robots.js`.
+- TypeScript declarations for `FetcherOptions`, `FetchResult`, `RobotsGroup`,
+  `RobotsRuleCheck`, and related functions in `index.d.ts`.
+
 ### Changed
 
 - `auditLlmsTxt` now returns three separate arrays — `issues` (hard errors), `notes`

@@ -6,10 +6,11 @@
  * verifica exit code + output esperado.
  */
 
-import { describe, it } from "node:test";
+import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 const __dirname = new URL(".", import.meta.url).pathname;
@@ -21,6 +22,23 @@ function run(args, opts = {}) {
     cwd: repoRoot,
     encoding: "utf8",
     ...opts,
+  });
+}
+
+/** Versión asíncrona de run que no bloquea el event loop. */
+function runAsync(args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cliPath, ...args], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      ...opts,
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => (stdout += chunk));
+    child.stderr.on("data", (chunk) => (stderr += chunk));
+    child.on("close", (code) => resolve({ status: code, stdout, stderr }));
+    child.on("error", reject);
   });
 }
 
@@ -817,5 +835,178 @@ describe("CLI technical", () => {
     assert.equal(status, 0);
     const parsed = JSON.parse(stdout);
     assert.equal(parsed.observations.appShell.detected, true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Technical audit — remote flags (Fase 2, plan 023)
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe("CLI technical --url", () => {
+  let server, baseUrl;
+
+  before(() => {
+    return new Promise((resolve, reject) => {
+      server = createServer((_req, res) => {
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(
+          '<!DOCTYPE html><html lang="en"><head><title>Remote Page</title></head><body><h1>Hello Remote</h1></body></html>'
+        );
+      });
+      server.listen(0, "127.0.0.1", () => {
+        const port = server.address().port;
+        baseUrl = `http://127.0.0.1:${port}`;
+        resolve();
+      });
+      server.on("error", reject);
+    });
+  });
+
+  after(() => {
+    if (server) server.close();
+  });
+
+  it("--url fetches and audits a remote page (JSON)", async () => {
+    const { status, stdout } = await runAsync([
+      "technical",
+      "--url",
+      `${baseUrl}/page`,
+      "--format",
+      "json",
+      "--allow-localhost",
+    ]);
+    assert.equal(status, 0);
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.status, "success");
+    assert.ok(parsed.observations.title.values.includes("Remote Page"));
+    assert.ok(parsed.findings.length > 0);
+  });
+
+  it("--url rejects http:// without allow-localhost or allow-private", async () => {
+    // Sin flags de red, las URLs http:// son rechazadas por el CLI
+    // (requiere https:// o --allow-localhost/--allow-private)
+    const { status } = await runAsync([
+      "technical",
+      "--url",
+      `${baseUrl}/page`,
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+  });
+
+  it("--url con host inalcanzable reporta error gracefully", async () => {
+    const { stdout } = await runAsync([
+      "technical",
+      "--url",
+      "http://127.0.0.1:19999/nonexistent",
+      "--format",
+      "json",
+      "--allow-localhost",
+    ]);
+    // Puede exit 0 o 1, pero no debe crashear y debe reportar error
+    const parsed = JSON.parse(stdout);
+    assert.equal(parsed.status, "error");
+    assert.ok(parsed.error);
+  });
+
+  it("--url rechaza esquema no https:// sin flags de red", () => {
+    const { status, stderr } = run([
+      "technical",
+      "--url",
+      "http://example.com/page",
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+    assert.ok(
+      stderr.includes("https") ||
+        stderr.includes("allow-private") ||
+        stderr.includes("allow-localhost")
+    );
+  });
+});
+
+describe("CLI technical --sitemap", () => {
+  // Nota: --sitemap requiere https:// (especificación). Las pruebas de
+  // integración sitemap completas están en tests/fetcher.test.js vía API.
+  // Aquí probamos los paths de error del CLI.
+
+  it("--sitemap con http:// es rechazado incluso con --allow-localhost", () => {
+    const { status, stderr } = run([
+      "technical",
+      "--sitemap",
+      "http://127.0.0.1:12345/sitemap.xml",
+      "--format",
+      "json",
+      "--allow-localhost",
+    ]);
+    assert.notEqual(status, 0);
+    assert.ok(stderr.includes("https"), "Debería requerir https://");
+  });
+
+  it("--sitemap requiere https:// sin flags de red", () => {
+    const { status } = run([
+      "technical",
+      "--sitemap",
+      "http://example.com/sitemap.xml",
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+  });
+});
+
+describe("CLI technical — mutual exclusion", () => {
+  const htmlFixture = "tests/fixtures/technical/valid-static.html";
+
+  it("rechaza --url con archivos locales", () => {
+    const { status, stderr } = run([
+      "technical",
+      htmlFixture,
+      "--url",
+      "https://example.com/page",
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+    assert.ok(stderr.includes("mutually exclusive") || stderr.includes("cannot"));
+  });
+
+  it("rechaza --sitemap con archivos locales", () => {
+    const { status, stderr } = run([
+      "technical",
+      htmlFixture,
+      "--sitemap",
+      "https://example.com/sitemap.xml",
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+    assert.ok(stderr.includes("mutually exclusive") || stderr.includes("cannot"));
+  });
+
+  it("rechaza --url y --sitemap juntos", () => {
+    const { status } = run([
+      "technical",
+      "--url",
+      "https://example.com/page",
+      "--sitemap",
+      "https://example.com/sitemap.xml",
+      "--format",
+      "json",
+    ]);
+    assert.notEqual(status, 0);
+  });
+
+  it("error si no hay archivos ni flags remotos", () => {
+    const { status, stderr } = run(["technical", "--format", "json"]);
+    assert.notEqual(status, 0);
+    assert.ok(
+      stderr.includes("file") ||
+        stderr.includes("url") ||
+        stderr.includes("sitemap") ||
+        stderr.includes("path")
+    );
   });
 });

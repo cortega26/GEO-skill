@@ -771,7 +771,7 @@ declare module "geo-opt" {
   }
 
   export function extractPageMetadata(content: string, filepath: string): PageMetadata;
-  export function resolvePageUrl(filepath: string, baseDir: string, siteUrl: string): string;
+  export function resolvePageUrl(filepath: string, baseDir: string, siteUrl: string, opts?: { stripPrefix?: string }): string;
 
   export interface LlmsEntry {
     title: string;
@@ -904,4 +904,71 @@ declare module "geo-opt" {
   export function scoreToBadgeGrade(score: number): BadgeGrade;
   export function generateBadgeUrl(score: number, options?: BadgeOptions): string;
   export function generateBadgeMarkdown(score: number, options?: BadgeMarkdownOptions): string;
+
+  // ═══ Fetcher (remote URL fetching with SSRF guards) ═══
+
+  export interface FetcherOptions {
+    /** Allow connections to private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16). */
+    allowPrivate?: boolean;
+    /** Allow connections to loopback addresses (127.0.0.0/8, ::1). Implies allowPrivate. */
+    allowLocalhost?: boolean;
+    /** Total request timeout in milliseconds (default: 30_000). */
+    timeoutMs?: number;
+    /** Maximum response body size in bytes (default: 2_097_152). */
+    maxSize?: number;
+    /** User-Agent header (default: geo-opt/2.0.0). */
+    userAgent?: string;
+  }
+
+  export interface FetchResult {
+    /** Response body as a UTF-8 string. */
+    html: string;
+    /** HTTP status code. */
+    statusCode: number;
+    /** Final URL after redirects. */
+    finalUrl: string;
+    /** Response headers (lowercase keys). */
+    headers: Record<string, string>;
+  }
+
+  /** Fetch a URL with SSRF guards, DNS rebinding mitigation, timeouts, and size limits. */
+  export function fetchUrl(url: string, options?: FetcherOptions): Promise<FetchResult>;
+
+  export interface RobotsGroup {
+    agents: string[];
+    rules: Array<{ directive: string; path: string }>;
+  }
+
+  /** Fetch and parse robots.txt for an origin. */
+  export function fetchRobotsTxt(
+    origin: string,
+    options?: FetcherOptions
+  ): Promise<{ groups: RobotsGroup[]; raw: string }>;
+
+  export interface RobotsRuleCheck {
+    allowed: boolean;
+    matchedRule: { directive: string; path: string } | null;
+  }
+
+  /** Check if a URL is blocked by parsed robots.txt groups. */
+  export function checkRobotsRule(
+    url: string,
+    groups: RobotsGroup[],
+    userAgent: string
+  ): RobotsRuleCheck;
+
+  /** Clear the robots.txt cache (useful for tests). */
+  export function clearRobotsCache(): void;
+
+  export const FETCHER_USER_AGENT: string;
+  export const RESPONSE_TIMEOUT_MS: number;
+  export const TOTAL_TIMEOUT_MS: number;
+  export const MAX_RESPONSE_SIZE: number;
+  export const MAX_REDIRECTS: number;
+
+  /** Parse raw robots.txt content into structured groups. */
+  export function parseRobotsGroups(content: string): RobotsGroup[];
+
+  /** Parse a sitemap XML string. Returns parsed URLs and validation info. */
+  export function parseSitemapXml(xml: string): ParsedSitemap;
 }

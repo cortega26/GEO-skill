@@ -135,7 +135,7 @@ export const AI_CRAWLER_REGISTRY = Object.freeze([
 // Compatibility export retained for existing consumers.
 export const AI_CRAWLER_AGENTS = AI_CRAWLER_REGISTRY.map(({ token }) => token);
 
-function parseRobotsGroups(content) {
+export function parseRobotsGroups(content) {
   const groups = [];
   let current = null;
 

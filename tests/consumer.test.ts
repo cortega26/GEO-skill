@@ -9,6 +9,37 @@
  * declaration and this fixture in the same change.
  */
 
+import { before, after } from "node:test";
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// ── Runtime fixture files ──
+// Several runtime calls below need real files on disk. Create a temp
+// directory inside the project root so security checks
+// (assertNewFileParentInsideCwd) pass — they require paths to be
+// inside process.cwd().
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = join(__filename, "..");
+const PROJECT_ROOT = join(__dirname, "..");
+const FIXTURE_DIR = mkdtempSync(join(PROJECT_ROOT, ".geo-opt-consumer-"));
+const fileMd = join(FIXTURE_DIR, "file.md");
+const testMd = join(FIXTURE_DIR, "test.md");
+const docsDir = join(FIXTURE_DIR, "docs");
+const robotsTxt = join(FIXTURE_DIR, "robots.txt");
+
+before(() => {
+  writeFileSync(fileMd, "# Test\n\nContent for consumer fixture.", "utf8");
+  writeFileSync(testMd, "# Schema Test\n\nContent.", "utf8");
+  mkdirSync(docsDir, { recursive: true });
+  writeFileSync(join(docsDir, "page.md"), "# Docs Page\n\nDoc content.", "utf8");
+  writeFileSync(robotsTxt, "User-agent: *\nAllow: /", "utf8");
+});
+
+after(() => {
+  rmSync(FIXTURE_DIR, { recursive: true, force: true });
+});
+
 // ── Types (compile-time only) ──
 import type {
   GeoConfig,
@@ -216,8 +247,8 @@ const _appl: boolean = isApplicable("documentation", "structure");
 const _notAppl: string[] = notApplicableDimensions("documentation");
 const _ceiling: { totalMax: number; dimMax: Record<string, number> } =
   scoreCeiling("documentation");
-const _detect: ProfileDetection = detectProfile("content", "file.md");
-const _resolved: ResolvedProfile = resolveProfile(_config, "content", "file.md");
+const _detect: ProfileDetection = detectProfile("content", fileMd);
+const _resolved: ResolvedProfile = resolveProfile(_config, "content", fileMd);
 
 // --- Observations ---
 const _obsStatus: ObservationStatus = "pass";
@@ -278,9 +309,9 @@ const _linkObs: LinkQualityObservation = {
   hasSourcesSection: true,
   hasExcessiveLinks: false,
 };
-const _contentObs: ContentObservations = observeContent("content", "file.md");
+const _contentObs: ContentObservations = observeContent("content", fileMd);
 const _obsParsed: { observations: ContentObservations; tokens: unknown; textContent: string } =
-  observeAndParse("content", "file.md");
+  observeAndParse("content", fileMd);
 
 // --- Findings ---
 const _fStatus: FindingStatus = "warn";
@@ -338,21 +369,21 @@ const _auditReport: AuditReport = {
 };
 const _scoreV1: { score: number; report: AuditReport } = scoreContent(
   "content",
-  "file.md",
+  fileMd,
   _config
 );
-const _auditFileResult: number = auditFile("file.md", _config, "json");
+const _auditFileResult: number = auditFile(fileMd, _config, "json");
 
 // --- Engine (unified) ---
 const _auditV1: { score: number; report: AuditReport | V2Report } = auditContent(
   "content",
-  "file.md",
+  fileMd,
   _config,
   "v1"
 );
 const _auditV2: { score: number; report: AuditReport | V2Report } = auditContent(
   "content",
-  "file.md",
+  fileMd,
   _config,
   "v2"
 );
@@ -406,7 +437,7 @@ const _v2Report: V2Report = {
   notApplicableDimensions: [],
   recommendations: ["Add more sources."],
 };
-const _scoreV2: { score: number; report: V2Report } = scoreContentV2("content", "file.md", _config);
+const _scoreV2: { score: number; report: V2Report } = scoreContentV2("content", fileMd, _config);
 
 // --- Rendering ---
 const _v1Text: string = renderV1Report(_auditReport, "test.md");
@@ -421,10 +452,10 @@ const _discOpts: DiscoverOptions = {
   recursive: true,
   ignorePatterns: ["node_modules"],
   allowedExtensions: new Set([".md"]),
-  cwd: "/app",
+  cwd: FIXTURE_DIR,
   config: _config,
 };
-const _files: string[] = discoverFiles(["docs/"], _discOpts);
+const _files: string[] = discoverFiles([docsDir], _discOpts);
 
 // --- Batch ---
 const _auditResults: AuditResult[] = auditFiles(_files, _config);
@@ -438,20 +469,20 @@ const _aggReport: AggregateReport = aggregateReport(_auditResults);
 const _batchResult: BatchInjectResult = batchInject(_files, "article", _config, { dryRun: true });
 
 // --- Schema ---
-const _schemaGraph: SchemaGraphObject = generateSchemaData("test.md", "article", _config);
+const _schemaGraph: SchemaGraphObject = generateSchemaData(testMd, "article", _config);
 const _injOpts: InjectOptions = { dryRun: true, noBranding: false };
 const _assertNewFile: { parentRealPath: string; cwdRealPath: string } =
-  assertNewFileParentInsideCwd("test.md");
+  assertNewFileParentInsideCwd(testMd);
 const _assertWritable: { targetRealPath: string; cwdRealPath: string } =
-  assertWritableTargetInsideCwd("test.md");
+  assertWritableTargetInsideCwd(testMd);
 const _validateNewFile:
   | { valid: true; parentRealPath: string; cwdRealPath: string }
-  | { valid: false; error: string } = validateNewFileParentInsideCwd("test.md");
+  | { valid: false; error: string } = validateNewFileParentInsideCwd(testMd);
 const _validateWritable:
   | { valid: true; targetRealPath: string; cwdRealPath: string }
-  | { valid: false; error: string } = validateWritableTargetInsideCwd("test.md");
+  | { valid: false; error: string } = validateWritableTargetInsideCwd(testMd);
 // injectSchema returns void (side-effect function)
-injectSchema("test.md", "article", _config, _injOpts);
+injectSchema(testMd, "article", _config, _injOpts);
 
 // --- Robots ---
 const _crawlerPurpose: CrawlerPurpose = "search";
@@ -481,15 +512,15 @@ const _crawlerVer: string = CRAWLER_REGISTRY_VERSION;
 const _crawlerReg: readonly CrawlerRegistryEntry[] = AI_CRAWLER_REGISTRY;
 const _crawlerAgents: string[] = AI_CRAWLER_AGENTS;
 const _robotsAudit: RobotsAuditReport = auditRobots("User-agent: *\nAllow: /");
-const _robotsCheck: RobotsAuditReport | void = checkRobots("robots.txt");
+const _robotsCheck: RobotsAuditReport | void = checkRobots(robotsTxt);
 
 // --- JSON-LD validation ---
 // validateSchemaFile returns void (side-effect function)
-validateSchemaFile("test.md");
+validateSchemaFile(testMd);
 
 // --- LLMs.txt ---
-const _pageMeta: PageMetadata = extractPageMetadata("content", "file.md");
-const _pageUrl: string = resolvePageUrl("file.md", "/base", "https://example.com");
+const _pageMeta: PageMetadata = extractPageMetadata("content", fileMd);
+const _pageUrl: string = resolvePageUrl(fileMd, FIXTURE_DIR, "https://example.com");
 const _llmsEntry: LlmsEntry = {
   title: "Page",
   url: "https://example.com/page",

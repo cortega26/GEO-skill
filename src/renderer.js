@@ -88,17 +88,21 @@ export function renderV1Report(report, filepath, options = {}) {
   const totalScore = report.total_score;
   const recs = report.recommendations || [];
 
+  // Helper: normaliza details (string | string[]) a string[]
+  const toLines = (details) =>
+    Array.isArray(details) ? details : typeof details === "string" ? [details] : [];
+
   const b = report.breakdown;
   const structScore = b.structure.score;
-  const structBreakdown = b.structure.details;
+  const structBreakdown = toLines(b.structure.details);
   const statsScore = b.statistics.score;
-  const statsBreakdown = b.statistics.details[0];
+  const statsBreakdown = toLines(b.statistics.details);
   const quotesScore = b.quotations.score;
-  const quotesBreakdown = b.quotations.details[0];
+  const quotesBreakdown = toLines(b.quotations.details);
   const citationScore = b.citations.score;
-  const citationBreakdown = b.citations.details.join("\n");
+  const citationBreakdown = toLines(b.citations.details);
   const clarityScore = b.clarity.score;
-  const clarityBreakdown = b.clarity.details;
+  const clarityBreakdown = toLines(b.clarity.details);
 
   const lines = [];
 
@@ -127,21 +131,25 @@ export function renderV1Report(report, filepath, options = {}) {
   lines.push(
     `${chalk.bold(`2. Statistics Density: ${dimColor(statsScore, 20)(`${statsScore}/20`)}`)}`
   );
-  lines.push(`   - ${statsBreakdown}`);
+  for (const item of statsBreakdown) {
+    lines.push(`   - ${item}`);
+  }
   lines.push(SEP);
 
   // 3. Quotations
   lines.push(
     `${chalk.bold(`3. Quotation Density: ${dimColor(quotesScore, 20)(`${quotesScore}/20`)}`)}`
   );
-  lines.push(`   - ${quotesBreakdown}`);
+  for (const item of quotesBreakdown) {
+    lines.push(`   - ${item}`);
+  }
   lines.push(SEP);
 
   // 4. Citations
   lines.push(
     `${chalk.bold(`4. Citation & Authority: ${dimColor(citationScore, 20)(`${citationScore}/20`)}`)}`
   );
-  for (const item of citationBreakdown.split("\n")) {
+  for (const item of citationBreakdown) {
     lines.push(`   - ${item}`);
   }
   lines.push(SEP);

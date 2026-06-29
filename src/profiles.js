@@ -282,7 +282,15 @@ export function detectProfile(content, filepath = "") {
   // the safe default when nothing specific is detected.
   const hadSignal = reasons.length > 0;
   if (!hadSignal) {
-    reasons.push("no specific profile signals detected; defaulting to editorial");
+    reasons.push(
+      "no specific profile signals detected; defaulting to editorial. " +
+        "Profiles looked for: regulated (privacy policy, terms of service, legal disclaimers), " +
+        "ecommerce (product prices, buy buttons, shopping carts), " +
+        "documentation (code blocks, API references, CLI examples), " +
+        "open-source (README, license badges, GitHub links), " +
+        "commercial-landing (CTAs, testimonials, pricing tables). " +
+        "Add matching signals to improve detection confidence."
+    );
   }
   return { profile: "editorial", confidence: hadSignal ? 0.4 : 0.2, reasons };
 }

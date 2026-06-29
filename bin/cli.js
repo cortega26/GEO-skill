@@ -31,6 +31,13 @@ import {
   setRemindersEnabled,
   validateSchemaFile,
   generateSitemapXml,
+  fetchUrl,
+  fetchRobotsTxt,
+  checkRobotsRule,
+  clearRobotsCache,
+  parseSitemapXml,
+  MAX_RESPONSE_SIZE,
+  TOTAL_TIMEOUT_MS,
 } from "../src/index.js";
 import { assertOutputDirInsideCwd } from "../src/schema.js";
 import {
@@ -433,6 +440,7 @@ llmstxtCmd
   .option("--description <text>", "Site description (default: from config)")
   .option("--full", "Also generate llms-full.txt with complete page content")
   .option("--max-chars <number>", "Max characters per llms-full file before splitting", "500000")
+  .option("--strip-prefix <prefix>", "Remove this prefix from generated URLs (e.g. 'src/data')")
   .option("--dry-run", "Preview without writing files")
   .action((files, options, cmd) => {
     const config = resolveConfig(cmd);
@@ -480,9 +488,17 @@ llmstxtCmd
         const section = suggestSection(fp, content);
 
         // Resolve URL
+        const stripPrefix = options.stripPrefix || "";
         let url = "";
         if (siteUrl) {
-          const rel = path.relative(process.cwd(), fp).split(path.sep).join("/");
+          let rel = path.relative(process.cwd(), fp).split(path.sep).join("/");
+          // Apply --strip-prefix: remove the prefix from the relative path
+          if (stripPrefix) {
+            const prefix = stripPrefix.replace(/\/+$/, "") + "/";
+            if (rel.startsWith(prefix)) {
+              rel = rel.slice(prefix.length);
+            }
+          }
           const ext = path.extname(rel);
           let withoutExt = rel.slice(0, -ext.length);
           if (path.basename(withoutExt) === "index") {
@@ -991,6 +1007,7 @@ program
   .option("--title <name>", "Site name")
   .option("--description <text>", "Site description")
   .option("--model <version>", "Audit scoring model (v1 or v2)", "v2")
+  .option("--strip-prefix <prefix>", "Remove this prefix from generated URLs (e.g. 'src/data')")
   .option("--dry-run", "Preview files without writing to disk")
   .action((dir, options, cmd) => {
     const config = resolveConfig(cmd);
@@ -1052,7 +1069,15 @@ program
       try {
         const content = r.content ?? fs.readFileSync(r.file, { encoding: "utf8" });
         const { title } = extractPageMetadata(content, r.file);
-        const rel = path.relative(process.cwd(), r.file).split(path.sep).join("/");
+        const stripPrefix = options.stripPrefix || "";
+        let rel = path.relative(process.cwd(), r.file).split(path.sep).join("/");
+        // Apply --strip-prefix: remove the prefix from the relative path
+        if (stripPrefix) {
+          const prefix = stripPrefix.replace(/\/+$/, "") + "/";
+          if (rel.startsWith(prefix)) {
+            rel = rel.slice(prefix.length);
+          }
+        }
         const ext = path.extname(rel);
         let urlPath = rel.slice(0, -ext.length);
         if (path.basename(urlPath) === "index") urlPath = path.dirname(urlPath);
@@ -1167,19 +1192,46 @@ program
 program
   .command("technical [files...]")
   .description(
-    "Audit HTML files for technical SEO/GEO fundamentals.\n" +
+    "Audit HTML files or remote URLs for technical SEO/GEO fundamentals.\n" +
       "  Checks: title, canonical, meta robots, headings, hreflang,\n" +
       "  links, structured data consistency, and app-shell detection.\n" +
-      "  Local files only — no network requests."
+      "  Local files: no network access. Remote mode: --url or --sitemap."
   )
   .option("--source-url <url>", "Base URL for resolving relative links in local HTML")
   .option("-f, --format <type>", "Output format: text or json", "text")
   .option("-o, --output <file>", "Write JSON report to file (json format only)")
+  .option(
+    "--url <url>",
+    "Audit a remote URL (repeatable; https: required)",
+    (val, prev) => (prev ? [].concat(prev, val) : [val])
+  )
+  .option("--sitemap <url>", "Audit pages discovered from a remote sitemap.xml (https: required)")
+  .option("--max-urls <n>", "Max URLs to fetch in sitemap mode", "50")
+  .option("--timeout <seconds>", "Request timeout in seconds", String(TOTAL_TIMEOUT_MS / 1000))
+  .option("--max-size <bytes>", "Max response size in bytes", String(MAX_RESPONSE_SIZE))
+  .option("--allow-private", "Allow connections to private IP ranges")
+  .option("--allow-localhost", "Allow connections to loopback addresses")
+  .option("--no-robots", "Skip robots.txt check in sitemap mode")
   .action((files, options, cmd) => {
     resolveConfig(cmd);
 
-    if (!files || files.length === 0) {
-      console.error("Error: Missing file path(s) for technical audit.");
+    // Commander retorna string para --url único, array para múltiples
+    const remoteUrls = options.url || [];
+    const sitemapUrl = options.sitemap || null;
+    const hasLocalFiles = Array.isArray(files) && files.length > 0;
+    const hasRemote = remoteUrls.length > 0 || sitemapUrl;
+
+    // Validación de exclusión mutua
+    if (hasLocalFiles && hasRemote) {
+      console.error(
+        "Error: Local files and --url/--sitemap are mutually exclusive. Use one or the other."
+      );
+      process.exit(1);
+    }
+
+    // Sin archivos ni URLs remotas
+    if (!hasLocalFiles && !hasRemote) {
+      console.error("Error: Provide local file path(s), --url, or --sitemap for technical audit.");
       process.exit(1);
     }
 
@@ -1188,136 +1240,487 @@ program
       process.exit(1);
     }
 
-    if (options.sourceUrl && !/^https?:\/\//i.test(options.sourceUrl)) {
-      console.error("Error: --source-url must be an absolute http(s) URL.");
+    // ── Modo local (Phase 1 — sin cambios de comportamiento) ──
+    if (hasLocalFiles) {
+      if (options.recursive) {
+        console.warn(chalk.yellow("Warning: --recursive has no effect in local file mode."));
+      }
+
+      // --url y --sitemap flags no deberían estar presentes con archivos locales
+      if (remoteUrls.length > 0) {
+        console.error("Error: --url cannot be used with local files.");
+        process.exit(1);
+      }
+      if (sitemapUrl) {
+        console.error("Error: --sitemap cannot be used with local files.");
+        process.exit(1);
+      }
+
+      // Los flags de red no aplican a modo local
+      if (options.allowPrivate || options.allowLocalhost || options.noRobots) {
+        console.warn(
+          chalk.yellow(
+            "Warning: --allow-private, --allow-localhost, and --no-robots have no effect in local file mode."
+          )
+        );
+      }
+
+      if (options.sourceUrl && !/^https?:\/\//i.test(options.sourceUrl)) {
+        console.error("Error: --source-url must be an absolute http(s) URL.");
+        process.exit(1);
+      }
+
+      const results = [];
+      for (const file of files) {
+        let html;
+        try {
+          html = fs.readFileSync(file, { encoding: "utf8" });
+        } catch (e) {
+          results.push({ file, status: "error", error: `Read failed: ${e.message}` });
+          continue;
+        }
+        try {
+          const report = auditTechnicalHtml(html, { sourceUrl: options.sourceUrl || null });
+          results.push({ file, status: "success", ...report });
+        } catch (e) {
+          results.push({ file, status: "error", error: e.message });
+        }
+      }
+
+      emitTechnicalResults(results, options);
+      return;
+    }
+
+    // ── Modo remoto ──
+    handleRemoteTechnical(options).catch((err) => {
+      console.error(`Error: ${err.message}`);
       process.exit(1);
+    });
+  });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Technical audit helpers (used by the technical command)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Emite los resultados de la auditoría técnica (texto o JSON).
+ * @param {Array} results — array de resultados de auditoría
+ * @param {object} options — opciones del CLI
+ */
+function emitTechnicalResults(results, options) {
+  if (options.format === "json") {
+    const payload = results.length === 1 ? results[0] : results;
+    const output = JSON.stringify(payload, null, 2);
+    if (options.output) {
+      const outPath = path.resolve(options.output);
+      try {
+        fs.writeFileSync(outPath, output, { encoding: "utf8" });
+      } catch (e) {
+        console.error(`Error: Failed to write ${outPath}: ${e.message}`);
+        process.exit(1);
+      }
+      console.log(`✓ Technical audit report written → ${path.relative(process.cwd(), outPath)}`);
+    } else {
+      console.log(output);
+    }
+    return;
+  }
+
+  // Text output
+  for (const r of results) {
+    if (r.status === "error") {
+      console.error(`\nError auditing ${r.file || r.target}: ${r.error}`);
+      continue;
+    }
+    console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
+    console.log(chalk.bold.blue("            TECHNICAL AUDIT REPORT                "));
+    console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
+    const label = r.file ? `File:   ${r.file}` : `Target: ${r.target}`;
+    console.log(chalk.bold(label));
+    if (r.target && r.target !== r.file) {
+      console.log(chalk.dim(`Target: ${r.target}`));
+    }
+    console.log(chalk.bold.blue("──────────────────────────────────────────────────"));
+
+    if (r.findings && r.findings.length > 0) {
+      console.log(chalk.bold(`\nFindings (${r.findings.length}):\n`));
+      for (const f of r.findings) {
+        const icon =
+          f.status === "pass"
+            ? chalk.green("✓")
+            : f.status === "warn"
+              ? chalk.yellow("⚠")
+              : chalk.red("✗");
+        console.log(`  ${icon} [${f.ruleId}] ${f.message}`);
+        if (f.remediation) {
+          console.log(chalk.dim(`     Fix: ${f.remediation}`));
+        }
+      }
+    } else {
+      console.log(chalk.green("\nNo issues found."));
+    }
+
+    if (r.observations) {
+      console.log(chalk.bold.blue("\n──────────────────────────────────────────────────"));
+      console.log(chalk.bold("Observations:"));
+      const obs = r.observations;
+      console.log(chalk.dim(`  Title:          ${obs.title?.values?.join(", ") || "(none)"}`));
+      console.log(
+        chalk.dim(
+          `  Visible words:  ${obs.visibleText?.wordCount ?? 0} (min: ${obs.visibleText?.minimumWords ?? 20})`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  Canonical:      ${obs.canonical?.count ?? 0} URL(s)${obs.canonical?.conflicts ? " ⚠ conflicts" : ""}`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  Meta robots:    noindex=${obs.robots?.noindex ?? false}, nofollow=${obs.robots?.nofollow ?? false}`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  Headings:       ${obs.headings?.values?.length ?? 0} (issues: ${obs.headings?.issues?.join(", ") || "none"})`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  Language:       ${obs.language?.documentLanguage || "(not set)"} (hreflang: ${obs.language?.hreflang?.length ?? 0})`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  Links:          ${obs.links?.values?.length ?? 0} total, ${obs.links?.internalCount ?? 0} internal, ${obs.links?.invalidCount ?? 0} invalid`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  StructuredData: ${obs.structuredData?.blockCount ?? 0} blocks, ${obs.structuredData?.invalidBlocks?.length ?? 0} invalid`
+        )
+      );
+      console.log(
+        chalk.dim(
+          `  App shell:      ${obs.appShell?.detected ? "⚠ detected" : "not detected"} (scripts: ${obs.appShell?.scriptCount ?? 0})`
+        )
+      );
+    }
+
+    console.log(chalk.bold.blue("══════════════════════════════════════════════════\n"));
+  }
+
+  // Summary line
+  const succeeded = results.filter((r) => r.status !== "error").length;
+  const failed = results.filter((r) => r.status === "error").length;
+  if (results.length > 1) {
+    const summary = `${succeeded} audited` + (failed > 0 ? `, ${failed} failed` : "");
+    console.log(chalk.dim(summary));
+  }
+
+  if (failed > 0) process.exit(1);
+}
+
+/**
+ * Maneja la auditoría técnica en modo remoto (--url o --sitemap).
+ *
+ * Es una función async que retorna una promesa. Los errores se manejan
+ * en el caller (el .action() de Commander).
+ *
+ * @param {object} options — opciones del CLI
+ * @returns {Promise<void>}
+ */
+async function handleRemoteTechnical(options) {
+  // Commander retorna string para --url único, array para múltiples
+  const rawUrls = options.url;
+  const remoteUrls = Array.isArray(rawUrls) ? rawUrls : rawUrls ? [rawUrls] : [];
+  const sitemapUrl = options.sitemap || null;
+  const format = options.format || "text";
+
+  // Validar flags de red
+  if (options.recursive) {
+    console.warn(chalk.yellow("Warning: --recursive has no effect in remote mode."));
+  }
+
+  const maxUrls = parseInt(options.maxUrls, 10);
+  if (isNaN(maxUrls) || maxUrls < 1) {
+    console.error(`Error: --max-urls must be a positive integer, got "${options.maxUrls}".`);
+    process.exit(1);
+  }
+
+  const timeoutSecs = parseFloat(options.timeout);
+  if (isNaN(timeoutSecs) || timeoutSecs <= 0) {
+    console.error(`Error: --timeout must be a positive number, got "${options.timeout}".`);
+    process.exit(1);
+  }
+
+  const maxSize = parseInt(options.maxSize, 10);
+  if (isNaN(maxSize) || maxSize < 1) {
+    console.error(`Error: --max-size must be a positive integer, got "${options.maxSize}".`);
+    process.exit(1);
+  }
+
+  const allowPrivate = options.allowPrivate || false;
+  const allowLocalhost = options.allowLocalhost || false;
+  const checkRobots = options.robots !== false;
+
+  const fetchOptions = {
+    allowPrivate,
+    allowLocalhost,
+    timeoutMs: timeoutSecs * 1000,
+    maxSize,
+  };
+
+  // ── Modo --url ──
+  if (remoteUrls.length > 0 && !sitemapUrl) {
+    // Requerir https:// para URLs explícitas, salvo que el usuario
+    // haya levantado restricciones con --allow-localhost o --allow-private.
+    if (!allowPrivate && !allowLocalhost) {
+      for (const url of remoteUrls) {
+        if (!url.startsWith("https://")) {
+          console.error(
+            `Error: --url requires https:// scheme: "${url}". Use --allow-private or --allow-localhost for http://.`
+          );
+          process.exit(1);
+        }
+      }
     }
 
     const results = [];
-    for (const file of files) {
-      let html;
-      try {
-        html = fs.readFileSync(file, { encoding: "utf8" });
-      } catch (e) {
-        results.push({ file, status: "error", error: `Read failed: ${e.message}` });
-        continue;
+    for (const url of remoteUrls) {
+      if (format !== "json") {
+        console.log(chalk.dim(`Fetching ${url}...`));
       }
       try {
-        const report = auditTechnicalHtml(html, { sourceUrl: options.sourceUrl || null });
-        results.push({ file, status: "success", ...report });
+        const { html, statusCode, finalUrl } = await fetchUrl(url, fetchOptions);
+        const report = auditTechnicalHtml(html, { sourceUrl: finalUrl });
+        results.push({
+          target: url,
+          finalUrl,
+          statusCode,
+          status: "success",
+          ...report,
+        });
       } catch (e) {
-        results.push({ file, status: "error", error: e.message });
+        results.push({ target: url, status: "error", error: e.message });
       }
     }
 
-    if (options.format === "json") {
-      const payload = results.length === 1 ? results[0] : results;
-      const output = JSON.stringify(payload, null, 2);
-      if (options.output) {
-        const outPath = path.resolve(options.output);
-        try {
-          fs.writeFileSync(outPath, output, { encoding: "utf8" });
-        } catch (e) {
-          console.error(`Error: Failed to write ${outPath}: ${e.message}`);
-          process.exit(1);
+    emitTechnicalResults(results, options);
+    return;
+  }
+
+  // ── Modo --sitemap ──
+  if (sitemapUrl) {
+    if (remoteUrls.length > 0) {
+      console.error("Error: --url and --sitemap are mutually exclusive.");
+      process.exit(1);
+    }
+
+    if (!sitemapUrl.startsWith("https://")) {
+      console.error(`Error: --sitemap requires https:// scheme: "${sitemapUrl}".`);
+      process.exit(1);
+    }
+
+    const sitemapParsed = new URL(sitemapUrl);
+    const origin = sitemapParsed.origin;
+
+    // 1. Fetch y parsear robots.txt
+    let robotsGroups = [];
+    if (checkRobots) {
+      if (format !== "json") {
+        console.log(chalk.dim(`Fetching robots.txt from ${origin}...`));
+      }
+      try {
+        const robots = await fetchRobotsTxt(origin, fetchOptions);
+        robotsGroups = robots.groups;
+        if (format !== "json") {
+          console.log(chalk.dim(`  Parsed ${robotsGroups.length} robots.txt group(s).`));
         }
-        console.log(`✓ Technical audit report written → ${path.relative(process.cwd(), outPath)}`);
-      } else {
-        console.log(output);
+      } catch (e) {
+        if (format !== "json") {
+          console.warn(chalk.yellow(`  Warning: Could not fetch robots.txt: ${e.message}`));
+        }
+      }
+    }
+
+    // 2. Fetch sitemap
+    if (format !== "json") {
+      console.log(chalk.dim(`Fetching sitemap ${sitemapUrl}...`));
+    }
+    clearRobotsCache(); // Limpiar caché del robots.txt para no interferir
+    const sitemapResult = await fetchUrl(sitemapUrl, {
+      ...fetchOptions,
+      // El sitemap puede ser grande
+      maxSize: Math.max(fetchOptions.maxSize, 10_485_760), // 10 MB para sitemaps
+    });
+
+    // 3. Parsear sitemap
+    const parsed = parseSitemapXml(sitemapResult.html);
+    if (!parsed.valid && parsed.urls.length === 0 && parsed.sitemapUrls.length === 0) {
+      console.error(`Error: Sitemap parse failed: ${parsed.issues.join("; ")}`);
+      process.exit(1);
+    }
+
+    if (parsed.issues.length > 0 && format !== "json") {
+      console.warn(chalk.yellow(`  Sitemap issues: ${parsed.issues.join("; ")}`));
+    }
+
+    // Si es un sitemap index, seguir los sub-sitemaps para extraer
+    // las URLs de página reales (soporta hasta 2 niveles de anidación).
+    let urls = parsed.urls.map((u) => u.loc);
+
+    if (parsed.sitemapUrls.length > 0) {
+      if (format !== "json") {
+        console.log(
+          chalk.dim(
+            `  Sitemap index with ${parsed.sitemapUrls.length} sub-sitemap(s). Fetching page URLs...`
+          )
+        );
+      }
+
+      const pageUrls = [];
+      for (const sub of parsed.sitemapUrls) {
+        try {
+          if (format !== "json") {
+            console.log(chalk.dim(`    Fetching sub-sitemap ${sub.loc}...`));
+          }
+          const subResult = await fetchUrl(sub.loc, {
+            ...fetchOptions,
+            maxSize: Math.max(fetchOptions.maxSize, 10_485_760),
+          });
+          const subParsed = parseSitemapXml(subResult.html);
+
+          if (subParsed.issues.length > 0 && format !== "json") {
+            console.warn(
+              chalk.yellow(`    Sub-sitemap issues: ${subParsed.issues.join("; ")}`)
+            );
+          }
+
+          // Un sub-sitemap podría ser a su vez otro índice (anidación de 2 niveles)
+          if (subParsed.sitemapUrls.length > 0) {
+            if (format !== "json") {
+              console.warn(
+                chalk.yellow(
+                  `    Nested sitemap index with ${subParsed.sitemapUrls.length} entries — fetching one level deeper...`
+                )
+              );
+            }
+            for (const subSub of subParsed.sitemapUrls) {
+              try {
+                const subSubResult = await fetchUrl(subSub.loc, {
+                  ...fetchOptions,
+                  maxSize: Math.max(fetchOptions.maxSize, 10_485_760),
+                });
+                const subSubParsed = parseSitemapXml(subSubResult.html);
+                pageUrls.push(...subSubParsed.urls.map((u) => u.loc));
+              } catch (e) {
+                if (format !== "json") {
+                  console.warn(
+                    chalk.yellow(
+                      `    Failed to fetch nested sub-sitemap ${subSub.loc}: ${e.message}`
+                    )
+                  );
+                }
+              }
+            }
+          } else {
+            pageUrls.push(...subParsed.urls.map((u) => u.loc));
+          }
+        } catch (e) {
+          if (format !== "json") {
+            console.warn(
+              chalk.yellow(`    Failed to fetch sub-sitemap ${sub.loc}: ${e.message}`)
+            );
+          }
+        }
+      }
+
+      if (format !== "json") {
+        console.log(
+          chalk.dim(`  Extracted ${pageUrls.length} page URLs from sub-sitemaps.`)
+        );
+      }
+
+      // Incluir tanto las URLs directas del índice como las extraídas de sub-sitemaps
+      urls = [...urls, ...pageUrls];
+    }
+
+    // 4. Aplicar robots.txt
+    const skipped = [];
+    const allowed = [];
+
+    if (robotsGroups.length > 0) {
+      for (const url of urls) {
+        const rule = checkRobotsRule(url, robotsGroups, "geo-opt/2.0 Technical Audit");
+        if (rule.allowed) {
+          allowed.push(url);
+        } else {
+          skipped.push({ url, matchedRule: rule.matchedRule });
+        }
       }
     } else {
-      // Text output
-      for (const r of results) {
-        if (r.status === "error") {
-          console.error(`\nError auditing ${r.file}: ${r.error}`);
-          continue;
-        }
-        console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
-        console.log(chalk.bold.blue("            TECHNICAL AUDIT REPORT                "));
-        console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
-        console.log(chalk.bold(`File:   ${r.file}`));
-        console.log(chalk.dim(`Target: ${r.target ?? "(none — local file)"}`));
-        console.log(chalk.bold.blue("──────────────────────────────────────────────────"));
-
-        if (r.findings && r.findings.length > 0) {
-          console.log(chalk.bold(`\nFindings (${r.findings.length}):\n`));
-          for (const f of r.findings) {
-            const icon =
-              f.status === "pass"
-                ? chalk.green("✓")
-                : f.status === "warn"
-                  ? chalk.yellow("⚠")
-                  : chalk.red("✗");
-            console.log(`  ${icon} [${f.ruleId}] ${f.message}`);
-            if (f.remediation) {
-              console.log(chalk.dim(`     Fix: ${f.remediation}`));
-            }
-          }
-        } else {
-          console.log(chalk.green("\nNo issues found."));
-        }
-
-        if (r.observations) {
-          console.log(chalk.bold.blue("\n──────────────────────────────────────────────────"));
-          console.log(chalk.bold("Observations:"));
-          const obs = r.observations;
-          console.log(chalk.dim(`  Title:          ${obs.title?.values?.join(", ") || "(none)"}`));
-          console.log(
-            chalk.dim(
-              `  Visible words:  ${obs.visibleText?.wordCount ?? 0} (min: ${obs.visibleText?.minimumWords ?? 20})`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  Canonical:      ${obs.canonical?.count ?? 0} URL(s)${obs.canonical?.conflicts ? " ⚠ conflicts" : ""}`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  Meta robots:    noindex=${obs.robots?.noindex ?? false}, nofollow=${obs.robots?.nofollow ?? false}`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  Headings:       ${obs.headings?.values?.length ?? 0} (issues: ${obs.headings?.issues?.join(", ") || "none"})`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  Language:       ${obs.language?.documentLanguage || "(not set)"} (hreflang: ${obs.language?.hreflang?.length ?? 0})`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  Links:          ${obs.links?.values?.length ?? 0} total, ${obs.links?.internalCount ?? 0} internal, ${obs.links?.invalidCount ?? 0} invalid`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  StructuredData: ${obs.structuredData?.blockCount ?? 0} blocks, ${obs.structuredData?.invalidBlocks?.length ?? 0} invalid`
-            )
-          );
-          console.log(
-            chalk.dim(
-              `  App shell:      ${obs.appShell?.detected ? "⚠ detected" : "not detected"} (scripts: ${obs.appShell?.scriptCount ?? 0})`
-            )
-          );
-        }
-
-        console.log(chalk.bold.blue("══════════════════════════════════════════════════\n"));
-      }
-
-      // Summary line
-      const succeeded = results.filter((r) => r.status !== "error").length;
-      const failed = results.filter((r) => r.status === "error").length;
-      if (results.length > 1) {
-        const summary = `${succeeded} file(s) audited` + (failed > 0 ? `, ${failed} failed` : "");
-        console.log(chalk.dim(summary));
-      }
-
-      if (failed > 0) process.exit(1);
+      allowed.push(...urls);
     }
-  });
+
+    if (format !== "json") {
+      console.log(
+        chalk.dim(`  ${allowed.length} URLs allowed, ${skipped.length} skipped by robots.txt.`)
+      );
+    }
+
+    // 5. Limitar a --max-urls
+    const toFetch = allowed.slice(0, maxUrls);
+    if (allowed.length > maxUrls && format !== "json") {
+      console.log(chalk.dim(`  Limited to ${maxUrls} URLs (of ${allowed.length} allowed).`));
+    }
+
+    // 6. Fetch y auditar cada página
+    const results = [];
+    let fetched = 0;
+    for (const url of toFetch) {
+      fetched += 1;
+      if (format !== "json") {
+        process.stderr.write(`\r  Fetching ${fetched}/${toFetch.length}...`);
+      }
+      try {
+        const { html, statusCode, finalUrl } = await fetchUrl(url, fetchOptions);
+        const report = auditTechnicalHtml(html, { sourceUrl: finalUrl });
+        results.push({
+          target: url,
+          finalUrl,
+          statusCode,
+          status: "success",
+          ...report,
+        });
+      } catch (e) {
+        results.push({ target: url, status: "error", error: e.message });
+      }
+    }
+
+    if (format !== "json") {
+      process.stderr.write("\n");
+    }
+
+    // Añadir URLs skippedas
+    for (const s of skipped) {
+      results.push({
+        target: s.url,
+        status: "skipped",
+        reason: s.matchedRule
+          ? `Disallowed by robots.txt: ${s.matchedRule.directive}: ${s.matchedRule.path}`
+          : "Disallowed by robots.txt",
+      });
+    }
+
+    emitTechnicalResults(results, options);
+    return;
+  }
+
+  // No debería llegar aquí
+  console.error("Error: No remote URLs specified.");
+  process.exit(1);
+}
 
 // --- Badge: generate a shields.io badge for a file's GEO score ---
 program

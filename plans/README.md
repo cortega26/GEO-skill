@@ -110,7 +110,7 @@ AI discoverability — not just a score, but fixes.
 | [022](022-calibrate-profiled-audit-v2.md) | Program slice | Profile-aware v2 model | P1 | L | T0 done | PARTIAL |
 | [024](archive/024-align-structured-data-semantics.md) | Execution | Accurate structured-data semantics | P1 | M | 030, 031, 034 | DONE |
 | [025](archive/025-harden-llms-artifacts.md) | Execution | Proposal-correct, curated artifacts | P2 | M | 024 | DONE |
-| [023](023-add-technical-discovery-audit.md) | Program slice | Phase 1 done (CLI technical + parseSitemapXml); Phase 2 deferred (remote fetch pending threat model) | P2 | L | T0 | PARTIAL |
+| [023](023-add-technical-discovery-audit.md) | Program slice | Phase 1 + 2 done (CLI technical, parseSitemapXml, remote fetch with SSRF guards per security review 2026-06-28) | P2 | L | T0 | DONE |
 | [026](archive/026-add-open-source-readiness.md) | Direction | Rule-pack readiness, not another engine | P3 | M | Q0, demand | SUPERSEDED |
 
 ### Advisor audit — post-Q0 quality fixes (2026-06-28)

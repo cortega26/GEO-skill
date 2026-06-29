@@ -95,9 +95,29 @@ export function calculateReadability(text) {
   };
 }
 
+/**
+ * Preprocess content for scoring and analysis.
+ *
+ * Strips YAML frontmatter (delimited by ---), fenced code blocks,
+ * HTML script/style tags, and HTML comments so they do not inflate
+ * word counts, quote/statistic detection, or heading parsing.
+ *
+ * @param {string} content — raw file content
+ * @returns {string} cleaned content
+ */
 export function preprocessContent(content) {
+  let text = content;
+
+  // Strip YAML frontmatter (--- delimiters at the start of the file).
+  // Matches: optional BOM, optional whitespace, ---, any content, ---.
+  const frontmatterRegex = /^(?:﻿)?\s*---[\t ]*\r?\n([\s\S]*?)\r?\n---[\t ]*\r?\n/;
+  const fmMatch = text.match(frontmatterRegex);
+  if (fmMatch) {
+    text = text.slice(fmMatch[0].length);
+  }
+
   // Strip markdown code blocks
-  let text = content.replace(/```[\s\S]*?```/g, "");
+  text = text.replace(/```[\s\S]*?```/g, "");
   // Strip HTML script and style tags
   text = text.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
   text = text.replace(/<style[\s\S]*?>[\s\S]*?<\/style>/gi, "");

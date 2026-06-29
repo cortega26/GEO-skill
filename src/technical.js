@@ -469,7 +469,12 @@ export function buildTechnicalFindings(observations) {
     ...language.hreflang.filter((entry) => !entry.validLanguage).map(() => "invalid_hreflang"),
     ...language.hreflang.filter((entry) => !entry.absolute).map(() => "non_absolute_hreflang_url"),
     ...language.duplicateHreflang.map((value) => `duplicate_${value}`),
-    ...(language.hasSelfHreflang === false ? ["missing_self_reference"] : []),
+    // Solo emitir missing_self_reference cuando hay hreflangs declarados
+    // pero ninguno apunta a la página actual. Un sitio monolingüe sin
+    // hreflangs no debería generar este aviso.
+    ...(language.hasSelfHreflang === false && language.hreflang.length > 0
+      ? ["missing_self_reference"]
+      : []),
   ];
   findings.push(
     finding({

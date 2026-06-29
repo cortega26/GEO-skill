@@ -64,11 +64,25 @@ export function extractPageMetadata(content, filepath) {
  * @param {string} filepath - absolute file path
  * @param {string} baseDir - absolute base directory of the site
  * @param {string} siteUrl - base URL of the site (e.g. https://example.com)
+ * @param {object} [opts] - additional options
+ * @param {string} [opts.stripPrefix] - prefix to remove from the relative path
+ *   before building the URL (e.g. "src/data" so that
+ *   "src/data/glossary/afc.md" becomes "/glossary/afc")
  * @returns {string} absolute URL
  */
-export function resolvePageUrl(filepath, baseDir, siteUrl) {
+export function resolvePageUrl(filepath, baseDir, siteUrl, opts = {}) {
+  const { stripPrefix = "" } = opts;
   const cleanBase = siteUrl.replace(/\/+$/, "");
   let rel = path.relative(baseDir, filepath);
+
+  // Apply stripPrefix: remove the prefix from the relative path
+  if (stripPrefix) {
+    const prefix = stripPrefix.replace(/\/+$/, "") + path.sep;
+    if (rel.startsWith(prefix)) {
+      rel = rel.slice(prefix.length);
+    }
+  }
+
   // Strip file extension for clean URLs (index.md → /, about.md → /about)
   const ext = path.extname(rel);
   let withoutExt = rel.slice(0, -ext.length);

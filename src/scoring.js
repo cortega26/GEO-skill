@@ -397,11 +397,26 @@ export function scoreContent(content, filepath, config) {
             break;
           }
         }
+        // Fallback: si no se encontró la expansión del diccionario, verificar
+        // si hay una expansión entre paréntesis inmediatamente adyacente.
+        // El patrón tolera formateo Markdown (\*\*, \*, etc.) entre el acrónimo y el paréntesis.
+        if (!isExplained) {
+          const parenPattern = new RegExp(
+            `\\b${acr}[\\s*_~]*\\(([^)]{10,})\\)|\\(([^)]{10,})\\)[\\s*_~]*${acr}\\b`,
+            "i"
+          );
+          if (parenPattern.test(textContent)) {
+            isExplained = true;
+          }
+        }
         if (!isExplained) {
           unexplained.push(`${acr} ('${expansion}')`);
         }
       } else {
-        const pattern = new RegExp(`(${acr}\\s*\\([^)]+\\)|\\([^)]+\\)\\s*${acr})`, "i");
+        const pattern = new RegExp(
+          `(\\b${acr}[\\s*_~]*\\([^)]+\\)|\\([^)]+\\)[\\s*_~]*${acr}\\b)`,
+          "i"
+        );
         if (!pattern.test(textContent) && acr.length > 2) {
           unexplained.push(acr);
         }
