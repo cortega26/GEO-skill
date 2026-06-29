@@ -2,11 +2,36 @@
 
 ---
 
+<div align="center">
+
 # geo-opt
 
 **Score, structure, and signal your content for every AI that reads the web.**
 
-`geo-opt` audits Markdown and HTML for AI discoverability, generates Schema.org JSON-LD structured data, reviews crawler policy, and produces `llms.txt` files — entirely locally, with zero telemetry and no content uploads.
+The AI-discoverability toolkit — part of the [Tooltician](https://tooltician.com) ecosystem.
+
+`geo-opt` audits Markdown and HTML for AI discoverability, generates Schema.org JSON-LD structured data, reviews crawler policy, and produces `llms.txt`, `sitemap.xml`, and standalone reports — entirely locally, with zero telemetry and no content uploads.
+
+<!-- Build & quality -->
+<p>
+  <a href="https://github.com/cortega26/geo-opt/actions"><img src="https://img.shields.io/github/actions/workflow/status/cortega26/geo-opt/ci.yml?branch=main&label=CI&logo=github" alt="CI status"></a>
+  <img src="https://img.shields.io/badge/tests-573_passed-16a34a?logo=nodedotjs&logoColor=white" alt="573 tests passed">
+  <img src="https://img.shields.io/badge/branch_coverage-80%25-16a34a" alt="Branch coverage 80%">
+  <img src="https://img.shields.io/badge/node-%E2%89%A522_LTS-brightgreen?logo=nodedotjs&logoColor=white" alt="Node.js >= 22 LTS">
+  <img src="https://img.shields.io/badge/TypeScript-types_included-3178C6?logo=typescript&logoColor=white" alt="TypeScript types included">
+  <img src="https://img.shields.io/badge/version-2.0.0-blue" alt="Version 2.0.0">
+</p>
+
+<!-- Positioning & ecosystem -->
+<p>
+  <img src="https://img.shields.io/badge/license-source--available-lightgrey" alt="Source-available">
+  <a href="https://arxiv.org/abs/2311.09735"><img src="https://img.shields.io/badge/grounded_in-GEO_·_KDD_2024-8A2BE2" alt="Grounded in GEO, KDD 2024"></a>
+  <img src="https://img.shields.io/badge/100%25_local-zero_telemetry-0a7d33" alt="100% local, zero telemetry">
+  <img src="https://img.shields.io/badge/runtime-Node_+_Python-5a67d8" alt="Cross-runtime: Node and Python">
+  <a href="https://tooltician.com"><img src="https://img.shields.io/badge/part_of-Tooltician-ff6b00" alt="Part of the Tooltician ecosystem"></a>
+</p>
+
+</div>
 
 ```
 $ node bin/cli.js audit content/article.md
@@ -30,14 +55,35 @@ $ node bin/cli.js audit content/article.md
   ✔  14 passed
 ```
 
-<p align="center">
-  <a href="https://github.com/cortega26/geo-opt/actions"><img src="https://img.shields.io/github/actions/workflow/status/cortega26/geo-opt/ci.yml?branch=main" alt="CI"></a>
-  <img src="https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen" alt="Node.js >=22.0.0">
-  <img src="https://img.shields.io/badge/tests-437_passed-16a34a" alt="437 tests passed">
-  <img src="https://img.shields.io/badge/license-source--available-lightgrey" alt="Source-available">
-</p>
+Scoring is grounded in the [GEO paper accepted at KDD 2024](https://arxiv.org/abs/2311.09735) and characterized against a 32-fixture regression corpus. It is a content-quality heuristic — not a statistical prediction or guarantee of ranking, retrieval, or citation by any AI system.
 
-Scoring is grounded in the [GEO paper accepted at KDD 2024](https://arxiv.org/abs/2311.09735) and characterized against a 32-fixture regression corpus. It is a content quality heuristic — not a statistical prediction or guarantee of ranking, retrieval, or citation by any AI system.
+---
+
+## Highlights
+
+- 🔒 **100% local.** Every audit, schema generation, and validation runs in-process. Your content never leaves your machine — zero telemetry, no outbound calls.
+- 📚 **Research-grounded, honestly labeled.** Scoring derives from the GEO literature; every heuristic carries an explicit evidence label (`strong`, `probable`, `experimental`, `project heuristic`) so you always know how much confidence to place in it.
+- 🧩 **One toolkit, the whole surface.** Audit, Schema.org JSON-LD for 8 types, `robots.txt`, `llms.txt`, `sitemap.xml`, technical SEO checks, and HTML reports — from a single CLI and a typed JavaScript library.
+- 🚦 **CI-native.** Threshold-based quality gates with non-zero exit codes; machine-readable JSON on stdout, diagnostics on stderr. Drop it into GitHub Actions or GitLab CI in one step.
+- 🤖 **Cross-runtime.** Canonical Node.js implementation plus a bundled Python 3 port for agent-driven workflows, kept honest by a shared conformance suite.
+- ✅ **Engineered to ship.** 573 tests across 97 suites, CI on Node 22 & 24, TypeScript declarations verified by a consumer-compilation fixture, and an enforced changelog policy.
+
+---
+
+## Table of contents
+
+- [Why your content needs GEO](#why-your-content-needs-geo)
+- [What geo-opt does](#what-geo-opt-does)
+- [Quick start](#quick-start)
+- [Command reference](#command-reference)
+- [Evidence vocabulary](#evidence-vocabulary)
+- [Free vs. Pro](#free-vs-pro)
+- [Configuration](#configuration)
+- [JavaScript library](#javascript-library)
+- [Privacy guarantees](#privacy-guarantees)
+- [Development](#development)
+- [Research](#research)
+- [License](#license)
 
 ---
 
@@ -70,7 +116,7 @@ node bin/cli.js audit content/ --recursive --threshold 70
 
 ### Structure
 
-Generate Schema.org JSON-LD for `Article`, `FAQ`, `Product`, `Course`, `Event`, `Recipe`, and `HowTo` types. Preview injections before modifying any file. Apply changes with automatic backups. Validate existing structured data blocks for syntax, context-appropriateness, and required fields — without ever inventing author, publisher, dates, prices, or availability.
+Generate Schema.org JSON-LD for `Article`, `NewsArticle`, `FAQ`, `Product`, `Course`, `Event`, `Recipe`, and `HowTo` types. Preview injections before modifying any file. Apply changes with automatic backups. Validate existing structured data blocks for syntax, context-appropriateness, and required fields — without ever inventing author, publisher, dates, prices, or availability.
 
 ```bash
 # Preview JSON-LD without writing to disk
@@ -94,22 +140,38 @@ node bin/cli.js robots generate --preset search-visible  # Pro
 
 ### Signal
 
-Generate `llms.txt` and `llms-full.txt` following the community proposal. Audit existing files for structural compliance and cross-check coverage against your local content.
+Generate `llms.txt` and `llms-full.txt` following the community proposal, plus a GEO-prioritized `sitemap.xml`. Audit existing files for structural compliance and cross-check coverage against your local content.
 
 ```bash
 node bin/cli.js llmstxt audit public/llms.txt
 node bin/cli.js llmstxt generate content/ --recursive --site-url https://example.com  # Pro
+node bin/cli.js sitemap generate content/ --base-url https://example.com               # Pro
+```
+
+### Inspect (technical)
+
+Audit HTML — local files offline, or remote URLs and sitemaps with built-in SSRF guards — for technical SEO/GEO fundamentals: titles, meta descriptions, headings, canonical tags, and structured-data presence.
+
+```bash
+# Local HTML, no network access
+node bin/cli.js technical public/index.html
+
+# Remote URL audit with private-IP and DNS-rebinding protection
+node bin/cli.js technical --url https://example.com/article
 ```
 
 ### Report *(Pro)*
 
-Generate standalone HTML audit reports with SVG score gauges, dimension bar charts, and print-ready CSS. Compare before/after snapshots to quantify the concrete impact of content changes.
+Generate standalone HTML audit reports with SVG score gauges, dimension bar charts, and print-ready CSS. Compare before/after snapshots to quantify the concrete impact of content changes. Or produce a complete optimization package — audit, schema, `llms.txt`, and `sitemap.xml` — in one command with `generate-all`.
 
 ```bash
 # Capture a baseline, make changes, then diff
 node bin/cli.js audit content/ --format json > baseline.json
 # ... edit content ...
 node bin/cli.js report content/ --compare baseline.json
+
+# One-shot optimization package
+node bin/cli.js generate-all content/ --site-url https://example.com  # Pro
 ```
 
 ---
@@ -139,7 +201,7 @@ Drop a single step into any pipeline to enforce a minimum content quality score 
     TOOLTICIAN_LICENSE_KEY: ${{ secrets.TOOLTICIAN_LICENSE_KEY }}
 ```
 
-The command exits non-zero when any file falls below the threshold, blocking deploys of under-optimized content. The `--format json` flag emits machine-readable output on stdout for downstream tooling; diagnostics always go to stderr.
+The command exits non-zero when any file falls below the threshold, blocking deploys of under-optimized content. The `--format json` flag emits machine-readable output on stdout for downstream tooling; diagnostics always go to stderr. A ready-to-use GitLab CI template ships in [`ci-templates/gitlab-ci.yml`](ci-templates/gitlab-ci.yml).
 
 ---
 
@@ -148,14 +210,17 @@ The command exits non-zero when any file falls below the threshold, blocking dep
 | Command | Tier | Description |
 |---|---|---|
 | `audit [files...]` | Free + Pro | Score content; supports `--recursive`, `--format json`, `--summary`, `--threshold <n>`, `--model v2` |
-| `report [files...]` | Pro | Standalone HTML report; `--compare <baseline.json>` for before/after diff |
+| `technical [files...]` | Free + Pro | Audit HTML for technical SEO/GEO fundamentals; local files offline, `--url`/`--sitemap` for remote with SSRF guards |
 | `schema <file> <type>` | Free + Pro | Print generated JSON-LD to stdout |
-| `inject <file> <type>` | Pro | Write JSON-LD into file; supports `--dry-run`, `--backup`, `--recursive`, `--no-branding` |
 | `validate <file>` | Free + Pro | Inspect and verify JSON-LD blocks in Markdown or HTML |
+| `inject <file> <type>` | Pro | Write JSON-LD into file; supports `--dry-run`, `--backup`, `--recursive`, `--no-branding` |
 | `robots audit <file>` | Free + Pro | Evaluate crawler policy; `--format json` for machine output |
 | `robots generate` | Pro | Draft `robots.txt` with `search-visible` or `open` preset |
-| `llmstxt generate [files...]` | Pro | Create `llms.txt` and optional `llms-full.txt` |
 | `llmstxt audit <file>` | Free + Pro | Validate structure and check content coverage |
+| `llmstxt generate [files...]` | Pro | Create `llms.txt` and optional `llms-full.txt` |
+| `sitemap generate [files...]` | Pro | Generate `sitemap.xml` with GEO-derived priorities |
+| `report [files...]` | Pro | Standalone HTML report; `--compare <baseline.json>` for before/after diff |
+| `generate-all [dir]` | Pro | One-shot package: audit report, schema, `llms.txt`, and `sitemap.xml` |
 | `badge <file>` | Free + Pro | Generate a GEO score badge for a file |
 | `init` | Free + Pro | Create a starter `geo_config.json` |
 | `config get\|set` | Free + Pro | Manage local preferences (reminders, telemetry) |
@@ -189,12 +254,15 @@ Every heuristic and recommendation carries a label describing the quality of res
 | Batch injection (`--recursive`) | No | Yes |
 | Branding-free output (`--no-branding`) | No | Yes |
 | Validate JSON-LD | Yes | Yes |
+| Technical HTML audit (local files) | Yes | Yes |
 | Audit `robots.txt` | Yes | Yes |
 | Generate `robots.txt` | No | Yes |
 | Audit `llms.txt` | Yes | Yes |
 | Generate `llms.txt` | No | Yes |
+| Generate `sitemap.xml` | No | Yes |
 | HTML audit reports with before/after diff | No | Yes |
-| Schema types | `article`, `faq`, `product` | All Free types + `course`, `event`, `recipe`, `howto` |
+| One-shot optimization package (`generate-all`) | No | Yes |
+| Schema types | `article`, `news-article`, `faq`, `product` | All Free types + `course`, `event`, `recipe`, `howto` |
 | JavaScript library — read functions | Yes | Yes |
 | JavaScript library — write / batch functions | No | Yes |
 
@@ -279,7 +347,7 @@ Any new root export must update `index.d.ts` and the consumer fixture in the sam
 |---|---|
 | Content never leaves your machine | Every audit, schema generation, and validation runs entirely in-process |
 | No telemetry by default | The transport switch is hard-disabled; no prompt appears and nothing is sent |
-| No silent network calls | Zero outbound requests in audit, schema, validate, or config paths |
+| No silent network calls | Outbound requests happen only when you explicitly opt in with `technical --url`/`--sitemap`, and are guarded against SSRF, DNS rebinding, and private-IP access |
 | `DO_NOT_TRACK` respected | The CLI checks the environment variable and stays silent when set |
 | Reminders are local and disableable | `node bin/cli.js config set reminders false` — permanent and immediate |
 | Machine output on stdout, diagnostics on stderr | Safe to pipe `--format json` output to other tools without noise |
@@ -292,8 +360,8 @@ The full opt-in telemetry design (currently dormant) is documented in [`docs/tel
 
 ```bash
 npm run check          # full suite: lint + format + JS tests + Python tests + conformance + typecheck + changelog
-npm test               # 437 tests · 67 suites · 0 failures (Node.js)
-npm run test:python    # Python compatibility port test suite
+npm test               # 573 tests · 97 suites · 0 failures (Node.js)
+npm run test:python    # Python compatibility port test suite (38 tests)
 npm run lint           # ESLint + Python py_compile
 npm run format:check   # Prettier dry-run
 npm run typecheck      # TypeScript consumer compilation
@@ -325,4 +393,4 @@ Documentation governance and change triggers are defined in [`docs/documentation
 - [Tooltician Community License 1.0](LICENSE) — source-available use with branding and redistribution conditions
 - [Tooltician Commercial License](COMMERCIAL-LICENSE.md) — issued commercial entitlements
 
-This project is source-available, not OSI-approved open source. Historical versions through commit `67f18be` remain available under [MIT](LICENSE-HISTORY.md).
+This project is source-available, not OSI-approved open source. Historical versions through commit `67f18be` remain available under [MIT](LICENSE-HISTORY.md). `geo-opt` is part of the [Tooltician](https://tooltician.com) AI-discoverability toolkit.
