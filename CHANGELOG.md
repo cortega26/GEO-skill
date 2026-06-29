@@ -7,6 +7,18 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Security
+
+- Hardened temporary file names in engagement and telemetry state writes with
+  `crypto.randomBytes(8)` suffix to prevent predictable PID-based temp file
+  attacks (OWASP audit finding).
+- Fixed IPv6 literal detection in `detectIpLiteral`: Node.js 22+ URL parser
+  returns bracketed IPv6 addresses (`[::1]`) which were not recognized as IP
+  literals, bypassing SSRF guards for loopback and private IPv6 ranges.
+- Added 8 SSRF regression tests covering known private IPv4/IPv6 addresses
+  (10.0.0.1, 192.168.1.1, 172.16.0.1, 127.0.0.1, 0.0.0.0, ::1, fe80::1,
+  fd00::1).
+
 ### Added
 
 - `geo-opt technical` now supports remote URL auditing via `--url` and `--sitemap` flags

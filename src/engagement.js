@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -44,7 +45,7 @@ export function readEngagementState(options = {}) {
 function writeEngagementState(state, options = {}) {
   const statePath = options.statePath || getStatePath(options.env, options.homedir);
   const directory = path.dirname(statePath);
-  const temporaryPath = `${statePath}.${process.pid}.tmp`;
+  const temporaryPath = `${statePath}.${process.pid}.${crypto.randomBytes(8).toString("hex")}.tmp`;
 
   try {
     fs.mkdirSync(directory, { recursive: true, mode: 0o700 });

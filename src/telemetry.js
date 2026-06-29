@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -94,7 +95,7 @@ export function setTelemetryConsent(decision, options = {}) {
   const normalized = normalizeConsent(decision);
   const statePath = options.statePath || getStatePath(options.env, options.homedir);
   const directory = path.dirname(statePath);
-  const temporaryPath = `${statePath}.${process.pid}.tmp`;
+  const temporaryPath = `${statePath}.${process.pid}.${crypto.randomBytes(8).toString("hex")}.tmp`;
   const next = { ...readRawState(statePath), [STATE_KEY]: normalized };
 
   try {

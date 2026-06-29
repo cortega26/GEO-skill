@@ -200,22 +200,27 @@ function checkIp(ip, allowPrivate, allowLocalhost) {
  * @returns {{ isIp: boolean, family: 4|6|null, address: string }}
  */
 function detectIpLiteral(hostname) {
+  // Node.js 22+ URL parser devuelve direcciones IPv6 con brackets ([::1]).
+  // Los quitamos primero para unificar la detección.
+  const isBracketed = hostname.startsWith("[") && hostname.endsWith("]");
+  const raw = isBracketed ? hostname.slice(1, -1) : hostname;
+
   // IPv4: cuatro octetos decimales
   const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-  const v4Match = hostname.match(ipv4Regex);
+  const v4Match = raw.match(ipv4Regex);
   if (v4Match) {
     const octets = [v4Match[1], v4Match[2], v4Match[3], v4Match[4]].map(Number);
     if (octets.every((o) => o >= 0 && o <= 255)) {
-      return { isIp: true, family: 4, address: hostname };
+      return { isIp: true, family: 4, address: raw };
     }
   }
 
   // IPv6: contiene ":" y caracteres hexadecimales
   const ipv6Regex = /^[0-9a-fA-F:]+$/;
-  if (hostname.includes(":") && ipv6Regex.test(hostname)) {
+  if (raw.includes(":") && ipv6Regex.test(raw)) {
     try {
       // Normalizar con la clase URL (convierte ::1, etc.)
-      const testUrl = new URL(`http://[${hostname}]:80/`);
+      const testUrl = new URL(`http://[${raw}]:80/`);
       const normalized = testUrl.hostname.replace(/^\[|\]$/g, "");
       return { isIp: true, family: 6, address: normalized };
     } catch {

@@ -89,6 +89,36 @@ describe("fetchUrl — SSRF guards", () => {
   it("rechaza URLs inválidas", async () => {
     await assert.rejects(() => fetchUrl("not a url"), /invalid url/i);
   });
+
+  // ── Regresión SSRF: IPs privadas conocidas ──
+  // Estos tests verifican que las IPs privadas más comunes son rechazadas
+  // en la etapa de validación, antes de cualquier intento de conexión.
+
+  const BLOCKED_IPS = [
+    { label: "10.0.0.1 (Class A private)", url: "http://10.0.0.1/" },
+    { label: "192.168.1.1 (Class C private)", url: "http://192.168.1.1/" },
+    { label: "172.16.0.1 (Class B private)", url: "http://172.16.0.1/" },
+    { label: "127.0.0.1 (IPv4 loopback)", url: "http://127.0.0.1/" },
+    { label: "0.0.0.0 (current network)", url: "http://0.0.0.0/" },
+  ];
+
+  for (const ip of BLOCKED_IPS) {
+    it(`bloquea IP privada — ${ip.label}`, async () => {
+      await assert.rejects(() => fetchUrl(ip.url), /blocked|private|loopback|current network/i);
+    });
+  }
+
+  it("bloquea IPv6 loopback ::1", async () => {
+    await assert.rejects(() => fetchUrl("http://[::1]/"), /blocked|loopback/i);
+  });
+
+  it("bloquea IPv6 link-local fe80::", async () => {
+    await assert.rejects(() => fetchUrl("http://[fe80::1]/"), /blocked|private/i);
+  });
+
+  it("bloquea IPv6 unique local fd00::", async () => {
+    await assert.rejects(() => fetchUrl("http://[fd00::1]/"), /blocked|private/i);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
