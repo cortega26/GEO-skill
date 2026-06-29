@@ -11,6 +11,7 @@
 import * as cheerio from "cheerio";
 
 import { buildReportMeta, createFinding } from "./findings.js";
+import { hasUnsafeHrefScheme } from "./url-safety.js";
 
 const ROBOTS_TOKENS = new Set([
   "all",
@@ -292,7 +293,7 @@ export function observeTechnicalHtml(html, options = {}) {
       const resolved = resolveHttpUrl(href, sourceUrl);
       const invalid =
         !href ||
-        /^javascript:/i.test(href) ||
+        hasUnsafeHrefScheme(href) ||
         (!href.startsWith("#") && sourceUrl !== null && !resolved);
       const rel = String($(element).attr("rel") ?? "")
         .toLowerCase()

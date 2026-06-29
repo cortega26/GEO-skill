@@ -297,6 +297,22 @@ describe("link quality", () => {
     assert.equal(obs.linkQuality.externalLinkCount, 0);
   });
 
+  it("ignores unsafe URI schemes when counting HTML internal links", () => {
+    const content = `
+      <html><body>
+        <a href="/guide">Guide</a>
+        <a href="https://example.com/source">Source</a>
+        <a href="javascript:alert(1)">Script</a>
+        <a href=" data:text/html,hello">Data</a>
+        <a href="vbscript:msgbox(1)">VBScript</a>
+        <a href="#top">Top</a>
+      </body></html>
+    `;
+    const obs = observeContent(content, "test.html");
+    assert.equal(obs.linkQuality.internalLinkCount, 1);
+    assert.equal(obs.linkQuality.externalLinkCount, 1);
+  });
+
   it("passes for documentation with good external links (SDK readme)", () => {
     const content = readFileSync("tests/fixtures/audit-v2/documentation/sdk-readme.md", "utf8");
     const obs = observeContent(content, "sdk-readme.md");

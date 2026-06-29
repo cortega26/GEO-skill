@@ -29,6 +29,12 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 
+- HTML link analysis now rejects non-HTTP URI schemes such as `data:`,
+  `javascript:`, and `vbscript:` instead of counting them as internal links.
+- `geo-opt generate-all` now confines fallback full-text reads to the files
+  discovered for the current run, and file discovery skips symlinked inputs.
+- The bundled Python compatibility script now validates its local engagement
+  state path before atomic writes.
 - `auditLlmsTxt` now returns three separate arrays — `issues` (hard errors), `notes`
   (informational recommendations), and `warnings` (safety concerns) — instead of a single `issues`
   list. Only a missing H1 makes `valid: false`, consistent with the llmstxt.org proposal which
@@ -267,8 +273,6 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - `package.json#main` updated to `dist/index.js`; `bin.geo-opt` updated to
   `./dist/bin/cli.js`. Local development and tests continue to use `src/` and
   `bin/cli.js` directly.
-
-
 
 - Pure local technical-discovery audits for supplied HTML, covering titles,
   visible text, canonical links, meta robots, heading order, language and

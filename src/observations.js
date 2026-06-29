@@ -15,6 +15,7 @@
 import { marked } from "marked";
 import * as cheerio from "cheerio";
 import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
+import { hasUnsafeHrefScheme, isFragmentHref, isHttpHref, normalizeHref } from "./url-safety.js";
 
 // Returns the index of the (n+1)-th (0-based) occurrence of needle, or -1.
 function nthIndexOf(haystack, needle, n) {
@@ -815,10 +816,10 @@ function observeLinkQuality(textContent, tokens, htmlMeta = null) {
     const $ = htmlMeta.cheerio;
     const body = $("body").length ? $("body") : $.root();
     body.find("a[href]").each((_, el) => {
-      const href = $(el).attr("href") || "";
-      if (/^https?:\/\//.test(href)) {
+      const href = normalizeHref($(el).attr("href"));
+      if (isHttpHref(href)) {
         externalLinks++;
-      } else if (!href.startsWith("#") && !href.startsWith("javascript:")) {
+      } else if (href && !isFragmentHref(href) && !hasUnsafeHrefScheme(href)) {
         internalLinks++;
       }
     });

@@ -182,11 +182,13 @@ export function discoverFiles(inputPaths, options = {}) {
 
     let stat;
     try {
-      stat = fs.statSync(resolved);
+      stat = fs.lstatSync(resolved);
     } catch {
       // Non-existent path — skip in batch, but report
       continue;
     }
+
+    if (stat.isSymbolicLink()) continue;
 
     if (stat.isDirectory()) {
       if (!recursive) {

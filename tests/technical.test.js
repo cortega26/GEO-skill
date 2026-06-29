@@ -69,6 +69,22 @@ describe("technical HTML audit", () => {
     assert.equal(report.observations.links.internalCount, 2);
   });
 
+  it("treats non-http URI scheme links as invalid", () => {
+    const report = auditTechnicalHtml(
+      `
+        <html><body>
+          <a href="/guide">Guide</a>
+          <a href="data:text/html,hello">Data</a>
+          <a href="vbscript:msgbox(1)">VBScript</a>
+          <a href="javascript:alert(1)">Script</a>
+        </body></html>
+      `,
+      { sourceUrl: "https://example.com/links" }
+    );
+    assert.equal(report.observations.links.invalidCount, 3);
+    assert.equal(report.observations.links.internalCount, 1);
+  });
+
   it("describes an empty app shell without declaring it broken", () => {
     const report = auditTechnicalHtml(fixture("empty-app-shell.html"), {
       sourceUrl: "https://example.com/app",

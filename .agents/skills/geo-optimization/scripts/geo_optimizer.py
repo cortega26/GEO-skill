@@ -6,6 +6,7 @@ import json
 import argparse
 import contextlib
 import io
+import tempfile
 from datetime import datetime, timezone
 
 import mistune
@@ -25,6 +26,7 @@ REMINDER_INJECTION_INTERVAL = 10
 REMINDER_COOLDOWN_SECONDS = 7 * 24 * 60 * 60
 STATE_DIR_ENV_VAR = "GEO_OPT_STATE_DIR"
 SUPPORT_URL = "https://www.tooltician.com"
+STATE_FILENAME = "state.json"
 CRAWLER_REGISTRY_VERSION = "2026-06-26"
 REPORT_VERSION = "1.0.0"
 MODEL_VERSION = "2.0.0"
@@ -459,7 +461,29 @@ def get_state_path(env=None):
         or env.get("XDG_CONFIG_HOME")
         or os.path.join(os.path.expanduser("~"), ".config")
     )
-    return os.path.join(base_dir, "geo-opt", "state.json")
+    return os.path.join(base_dir, "geo-opt", STATE_FILENAME)
+
+
+def resolve_state_path(state_path=None, env=None):
+    raw_path = state_path or get_state_path(env)
+    expanded = os.path.expanduser(str(raw_path))
+    normalized = os.path.abspath(os.path.normpath(expanded))
+    if os.path.basename(normalized) != STATE_FILENAME:
+        raise ValueError("Engagement state path must resolve to state.json.")
+    if "\x00" in expanded:
+        raise ValueError("Engagement state path contains an invalid character.")
+
+    directory = os.path.dirname(normalized)
+    if not directory:
+        raise ValueError("Engagement state path must include a directory.")
+    if os.path.islink(normalized):
+        raise ValueError("Engagement state path must not be a symbolic link.")
+
+    directory_real = os.path.realpath(directory)
+    state_real = os.path.realpath(normalized)
+    if os.path.commonpath([directory_real, state_real]) != directory_real:
+        raise ValueError("Engagement state path escapes its state directory.")
+    return state_real
 
 
 def default_engagement_state():
@@ -471,8 +495,8 @@ def default_engagement_state():
 
 
 def read_engagement_state(state_path=None, env=None):
-    state_path = state_path or get_state_path(env)
     try:
+        state_path = resolve_state_path(state_path, env)
         with open(state_path, "r", encoding="utf-8") as state_file:
             parsed = json.load(state_file)
         state = default_engagement_state()
@@ -488,22 +512,29 @@ def read_engagement_state(state_path=None, env=None):
 
 
 def write_engagement_state(state, state_path=None, env=None):
-    state_path = state_path or get_state_path(env)
-    directory = os.path.dirname(state_path)
-    temporary_path = f"{state_path}.{os.getpid()}.tmp"
+    temporary_path = None
     try:
+        state_path = resolve_state_path(state_path, env)
+        directory = os.path.dirname(state_path)
         os.makedirs(directory, mode=0o700, exist_ok=True)
-        with open(temporary_path, "w", encoding="utf-8") as state_file:
+        descriptor, temporary_path = tempfile.mkstemp(
+            prefix=f".{STATE_FILENAME}.",
+            suffix=".tmp",
+            dir=directory,
+            text=True,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as state_file:
             json.dump(state, state_file, indent=2)
             state_file.write("\n")
         os.chmod(temporary_path, 0o600)
         os.replace(temporary_path, state_path)
         return True
-    except OSError:
-        try:
-            os.remove(temporary_path)
-        except OSError:
-            pass
+    except (OSError, ValueError):
+        if temporary_path:
+            try:
+                os.remove(temporary_path)
+            except OSError:
+                pass
         return False
 
 

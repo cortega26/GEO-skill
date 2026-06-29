@@ -34,6 +34,7 @@ from geo_optimizer import (
     record_successful_free_injection,
     reminders_are_enabled,
     set_reminders_enabled,
+    write_engagement_state,
 )
 
 class TestGeoOptimizer(unittest.TestCase):
@@ -493,6 +494,36 @@ class TestGeoOptimizer(unittest.TestCase):
             self.assertTrue(
                 read_engagement_state(state_path, {})["remindersEnabled"]
             )
+
+    def test_engagement_state_rejects_unsafe_state_file_paths(self):
+        with tempfile.TemporaryDirectory() as state_directory:
+            unsafe_path = os.path.join(state_directory, "not-state.json")
+            self.assertFalse(
+                write_engagement_state(
+                    {"remindersEnabled": False},
+                    state_path=unsafe_path,
+                    env={},
+                )
+            )
+            self.assertFalse(os.path.exists(unsafe_path))
+
+    def test_engagement_state_rejects_symlinked_state_file_escape(self):
+        with tempfile.TemporaryDirectory() as state_directory:
+            outside_path = os.path.join(state_directory, "outside.json")
+            state_path = os.path.join(state_directory, "state.json")
+            try:
+                os.symlink(outside_path, state_path)
+            except (OSError, NotImplementedError):
+                return
+
+            self.assertFalse(
+                write_engagement_state(
+                    {"remindersEnabled": False},
+                    state_path=state_path,
+                    env={},
+                )
+            )
+            self.assertFalse(os.path.exists(outside_path))
 
     def test_discover_files_finds_files_in_directory(self):
         """discover_files should find .md and .html files recursively."""

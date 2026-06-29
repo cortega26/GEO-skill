@@ -9,7 +9,15 @@
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -393,6 +401,32 @@ describe("CLI generate-all", () => {
       sitemapXml.includes("<lastmod>"),
       `sitemap.xml debe contener <lastmod>, pero contiene:\n${sitemapXml}`
     );
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("generate-all does not follow symlinked content outside the discovered set", () => {
+    const tmpDir = mkdtempSync(join(repoRoot, "tmp-cli-symlink-"));
+    const contentDir = join(tmpDir, "content");
+    const outDir = join(tmpDir, "out");
+    mkdirSync(contentDir, { recursive: true });
+    writeFileSync(join(tmpDir, "outside.md"), "# Outside\n\nSecret content.");
+    try {
+      symlinkSync(join(tmpDir, "outside.md"), join(contentDir, "linked.md"));
+    } catch {
+      rmSync(tmpDir, { recursive: true, force: true });
+      return;
+    }
+
+    const { status } = run([
+      "generate-all",
+      contentDir,
+      "--recursive",
+      "--output",
+      outDir,
+      "--site-url",
+      "https://example.com",
+    ]);
+    assert.equal(status, 1);
     rmSync(tmpDir, { recursive: true, force: true });
   });
 });
