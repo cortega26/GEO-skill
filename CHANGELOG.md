@@ -31,8 +31,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 - HTML link analysis now rejects non-HTTP URI schemes such as `data:`,
   `javascript:`, and `vbscript:` instead of counting them as internal links.
-- `geo-opt generate-all` now confines fallback full-text reads to the files
-  discovered for the current run, and file discovery skips symlinked inputs.
+- `geo-opt generate-all` now reuses audited content for full-text generation
+  instead of re-reading by path, and file discovery skips symlinked inputs.
 - The bundled Python compatibility script now validates its local engagement
   state path before atomic writes.
 - `auditLlmsTxt` now returns three separate arrays — `issues` (hard errors), `notes`

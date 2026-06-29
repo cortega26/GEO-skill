@@ -66,26 +66,6 @@ function resolveConfig(cmd) {
   }
 }
 
-function canonicalFileSet(files) {
-  const canonical = new Set();
-  for (const file of files) {
-    try {
-      canonical.add(fs.realpathSync(file));
-    } catch {
-      // Missing or unreadable paths cannot be trusted for fallback reads.
-    }
-  }
-  return canonical;
-}
-
-function readDiscoveredFileContent(file, allowedFiles) {
-  const realFile = fs.realpathSync(file);
-  if (!allowedFiles.has(realFile)) {
-    throw new Error("File is outside the discovered content set.");
-  }
-  return fs.readFileSync(realFile, { encoding: "utf8" });
-}
-
 const program = new Command();
 
 program
@@ -1080,7 +1060,6 @@ program
 
     const scoreEntries = [];
     const fullEntries = [];
-    const discoveredFiles = canonicalFileSet(files);
     for (const r of auditResults) {
       if (r.status === "success" && r.report) {
         const score = r.score ?? r.report.total_score ?? r.report.effectiveScore;
@@ -1088,7 +1067,8 @@ program
       }
       // Read content for full-text generation
       try {
-        const content = r.content ?? readDiscoveredFileContent(r.file, discoveredFiles);
+        if (typeof r.content !== "string") continue;
+        const content = r.content;
         const { title } = extractPageMetadata(content, r.file);
         const stripPrefix = options.stripPrefix || "";
         let rel = path.relative(process.cwd(), r.file).split(path.sep).join("/");

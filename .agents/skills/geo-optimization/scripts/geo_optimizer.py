@@ -513,10 +513,12 @@ def read_engagement_state(state_path=None, env=None):
 
 def write_engagement_state(state, state_path=None, env=None):
     temporary_path = None
+    directory_descriptor = None
     try:
         state_path = resolve_state_path(state_path, env)
         directory = os.path.dirname(state_path)
         os.makedirs(directory, mode=0o700, exist_ok=True)
+        directory_descriptor = os.open(directory, os.O_RDONLY)
         descriptor, temporary_path = tempfile.mkstemp(
             prefix=f".{STATE_FILENAME}.",
             suffix=".tmp",
@@ -527,7 +529,12 @@ def write_engagement_state(state, state_path=None, env=None):
             json.dump(state, state_file, indent=2)
             state_file.write("\n")
         os.chmod(temporary_path, 0o600)
-        os.replace(temporary_path, state_path)
+        os.replace(
+            os.path.basename(temporary_path),
+            STATE_FILENAME,
+            src_dir_fd=directory_descriptor,
+            dst_dir_fd=directory_descriptor,
+        )
         return True
     except (OSError, ValueError):
         if temporary_path:
@@ -536,6 +543,12 @@ def write_engagement_state(state, state_path=None, env=None):
             except OSError:
                 pass
         return False
+    finally:
+        if directory_descriptor is not None:
+            try:
+                os.close(directory_descriptor)
+            except OSError:
+                pass
 
 
 def set_reminders_enabled(enabled, state_path=None, env=None):
