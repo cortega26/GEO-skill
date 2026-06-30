@@ -30,34 +30,37 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("scoreToPriority", () => {
-  it("mapea score ≥80 a 1.0", () => {
-    assert.equal(scoreToPriority(80), 1.0);
-    assert.equal(scoreToPriority(95), 1.0);
+  it("mapea score 90–100 a 1.0", () => {
     assert.equal(scoreToPriority(100), 1.0);
+    assert.equal(scoreToPriority(95), 1.0);
+    assert.equal(scoreToPriority(90), 1.0);
   });
 
-  it("mapea score 60–79 a 0.8", () => {
-    assert.equal(scoreToPriority(60), 0.8);
-    assert.equal(scoreToPriority(70), 0.8);
-    assert.equal(scoreToPriority(79), 0.8);
+  it("mapea score 80–89 a 0.9", () => {
+    assert.equal(scoreToPriority(85), 0.9);
+    assert.equal(scoreToPriority(80), 0.9);
   });
 
-  it("mapea score 40–59 a 0.5", () => {
+  it("mapea score 60–79 proporcionalmente", () => {
+    assert.equal(scoreToPriority(75), 0.8);
+    assert.equal(scoreToPriority(60), 0.7);
+  });
+
+  it("mapea score 40–59 proporcionalmente", () => {
+    assert.equal(scoreToPriority(57), 0.6);
+    assert.equal(scoreToPriority(50), 0.6);
     assert.equal(scoreToPriority(40), 0.5);
-    assert.equal(scoreToPriority(50), 0.5);
-    assert.equal(scoreToPriority(59), 0.5);
   });
 
-  it("mapea score 20–39 a 0.3", () => {
+  it("mapea score 20–39 proporcionalmente", () => {
+    assert.equal(scoreToPriority(35), 0.4);
     assert.equal(scoreToPriority(20), 0.3);
-    assert.equal(scoreToPriority(30), 0.3);
-    assert.equal(scoreToPriority(39), 0.3);
   });
 
-  it("mapea score <20 a 0.1", () => {
+  it("mapea score <20 a mínimo 0.1", () => {
+    assert.equal(scoreToPriority(15), 0.2);
+    assert.equal(scoreToPriority(5), 0.1);
     assert.equal(scoreToPriority(0), 0.1);
-    assert.equal(scoreToPriority(10), 0.1);
-    assert.equal(scoreToPriority(19), 0.1);
   });
 
   it("retorna 0.5 para valores no numéricos o NaN", () => {
@@ -249,13 +252,14 @@ describe("sitemap — integración de prioridades con scoring", () => {
     ];
     const xml = generateSitemapXml(entries);
     assert.ok(xml.includes("<priority>1.0</priority>"));
+    assert.ok(xml.includes("<priority>0.9</priority>"));
     assert.ok(xml.includes("<priority>0.8</priority>"));
   });
 
   it("un sitio con contenido pobre tiene prioridades bajas", () => {
     const entries = [
       { url: "https://example.com/thin", score: 25 },
-      { url: "https://example.com/empty", score: 10 },
+      { url: "https://example.com/empty", score: 8 },
     ];
     const xml = generateSitemapXml(entries);
     assert.ok(xml.includes("<priority>0.3</priority>"));

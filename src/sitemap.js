@@ -101,10 +101,15 @@ function fileLastmod(filePath) {
  */
 export function scoreToPriority(score) {
   if (typeof score !== "number" || isNaN(score)) return 0.5;
-  if (score >= 80) return 1.0;
-  if (score >= 60) return 0.8;
+  if (score >= 90) return 1.0;
+  if (score >= 80) return 0.9;
+  if (score >= 70) return 0.8;
+  if (score >= 60) return 0.7;
+  if (score >= 50) return 0.6;
   if (score >= 40) return 0.5;
+  if (score >= 30) return 0.4;
   if (score >= 20) return 0.3;
+  if (score >= 10) return 0.2;
   return 0.1;
 }
 

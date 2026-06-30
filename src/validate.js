@@ -3,21 +3,36 @@ import fs from "fs";
 // Required fields per Schema.org type as specified by Google's structured
 // data guidelines. Types not listed here still pass basic structure checks.
 const REQUIRED_FIELDS = {
+  // Content types
   Article: ["headline"],
   NewsArticle: ["headline", "datePublished"],
   BlogPosting: ["headline"],
   TechArticle: ["headline"],
   DiscussionForumPosting: ["headline"],
   SocialMediaPosting: ["headline"],
+  // Structured data containers
   FAQPage: ["mainEntity"],
-  Product: ["name"],
+  QAPage: ["mainEntity"],
+  ItemList: ["itemListElement"],
+  BreadcrumbList: ["itemListElement"],
+  // Entities
   Organization: ["name"],
   Person: ["name"],
+  Product: ["name"],
+  Service: ["name"],
+  ProfessionalService: ["name"],
+  LocalBusiness: ["name"],
+  Corporation: ["name"],
+  EducationalOrganization: ["name"],
+  // Web objects
   WebPage: ["name"],
-  BreadcrumbList: ["itemListElement"],
-  SoftwareApplication: ["name", "applicationCategory"],
+  WebSite: ["name"],
   ImageObject: ["url"],
   VideoObject: ["name", "description"],
+  SoftwareApplication: ["name", "applicationCategory"],
+  // Contact/location
+  PostalAddress: ["streetAddress"],
+  ContactPoint: ["telephone"],
   // Pro types
   Course: ["name", "description"],
   Event: ["name", "startDate"],

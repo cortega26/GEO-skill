@@ -43,6 +43,20 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   `.gitignore` fue removido porque `discoverFiles()` aplica los patrones de
   `.gitignore` del CWD a todos los paths, filtrando directorios temporales
   creados por los tests.
+- **P5 — `--site-url` visible en `--help`.** Se usó `new Option(...).hideHelp()`
+  para ocultar el alias `--site-url` del help de `llmstxt generate` y
+  `generate-all`. Solo `--base-url` aparece ahora.
+- **P12 — Falsos positivos con `ProfessionalService` y otros.** Se agregaron
+  10 tipos adicionales de Schema.org a `REQUIRED_FIELDS`: `QAPage`, `ItemList`,
+  `Service`, `ProfessionalService`, `LocalBusiness`, `Corporation`,
+  `EducationalOrganization`, `WebSite`, `PostalAddress`, `ContactPoint`.
+- **P13 — `--audit` no diferenciaba prioridades cercanas.** `scoreToPriority`
+  ahora usa 10 buckets (0.1–1.0 en incrementos de 0.1) en vez de 5, lo que
+  permite diferenciar scores como 57 y 55 que antes caían en el mismo bucket.
+- **P16 — "Missing file path" sin hint sobre `--ignore`.** El mensaje de error
+  cuando no se pasan archivos ahora incluye la explicación sobre el orden
+  correcto de `--ignore`. Anteriormente solo aparecía en el error de
+  `discoverFiles`, no en la validación temprana de Commander.js.
 - **P2 — --help sin output cuando falta dist/.** Se agregó un bloque try/catch
   alrededor de `program.parse()` que detecta errores `ENOENT`/`MODULE_NOT_FOUND`
   y muestra un mensaje amigable sugiriendo ejecutar `npm run build`.

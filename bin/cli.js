@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { Command, Option } from "commander";
 import fs from "fs";
 import chalk from "chalk";
 import path from "path";
@@ -128,7 +128,12 @@ program
       if (options.recursive) {
         files = ["."];
       } else {
-        console.error("Error: Missing file path for audit command.");
+        console.error(
+          "Error: Missing file path for audit command.\n" +
+            "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+            '  geo-opt audit <files...> --ignore "pattern"   ✅\n' +
+            '  geo-opt audit --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+        );
         process.exit(1);
       }
     }
@@ -504,7 +509,7 @@ llmstxtCmd
   .option("--ignore <patterns...>", "Additional ignore patterns (gitignore syntax)")
   .option("--output <dir>", "Output directory", ".")
   .option("--base-url <url>", "Base URL of the site (e.g. https://example.com)")
-  .option("--site-url <url>", "", "") // hidden backward-compat alias
+  .addOption(new Option("--site-url <url>").hideHelp()) // backward-compat alias
   .option("--title <name>", "Site name (default: from config or directory name)")
   .option("--description <text>", "Site description (default: from config)")
   .option("--full", "Also generate llms-full.txt with complete page content")
@@ -1082,7 +1087,7 @@ program
   .option("--ignore <patterns...>", "Additional ignore patterns")
   .option("--output <dir>", "Output directory", "geo-package")
   .option("--base-url <url>", "Base URL of the site (e.g. https://example.com)")
-  .option("--site-url <url>", "", "") // hidden backward-compat alias
+  .addOption(new Option("--site-url <url>").hideHelp()) // backward-compat alias
   .option("--title <name>", "Site name")
   .option("--description <text>", "Site description")
   .option("--model <version>", "Audit scoring model: v2 (default) or v1", "v2")
