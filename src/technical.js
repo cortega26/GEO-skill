@@ -11,7 +11,7 @@
 import * as cheerio from "cheerio";
 
 import { buildReportMeta, createFinding } from "./findings.js";
-import { hasUnsafeHrefScheme } from "./url-safety.js";
+import { hasUnsafeHrefScheme, isWellKnownSafeScheme } from "./url-safety.js";
 
 const ROBOTS_TOKENS = new Set([
   "all",
@@ -70,6 +70,23 @@ function isInternalUrl(url, sourceUrl) {
   if (!url || !sourceUrl) return null;
   const source = parseAbsoluteHttpUrl(sourceUrl);
   return source ? url.origin === source.origin : null;
+}
+
+/**
+ * Normaliza una URL para comparación: elimina el trailing slash del pathname
+ * salvo que sea la raíz "/". Esto permite que `https://example.com/page/` y
+ * `https://example.com/page` se consideren la misma página a efectos de
+ * auto-referencia hreflang.
+ *
+ * @param {string} urlStr
+ * @returns {string}
+ */
+function normalizeUrlForHreflang(urlStr) {
+  const u = new URL(urlStr);
+  if (u.pathname.length > 1 && u.pathname.endsWith("/")) {
+    return new URL(u.pathname.slice(0, -1) + u.search + u.hash, u.origin).href;
+  }
+  return u.href;
 }
 
 function extractRobotsDirectives($) {
@@ -282,9 +299,12 @@ export function observeTechnicalHtml(html, options = {}) {
     ),
   ];
   const hasSelfHreflang = sourceUrl
-    ? hreflang.some(
-        (entry) => resolveHttpUrl(entry.href, sourceUrl)?.href === new URL(sourceUrl).href
-      )
+    ? hreflang.some((entry) => {
+        const resolved = resolveHttpUrl(entry.href, sourceUrl);
+        return (
+          resolved && normalizeUrlForHreflang(resolved.href) === normalizeUrlForHreflang(sourceUrl)
+        );
+      })
     : null;
 
   const links = $("a[href]")
@@ -294,7 +314,7 @@ export function observeTechnicalHtml(html, options = {}) {
       const invalid =
         !href ||
         hasUnsafeHrefScheme(href) ||
-        (!href.startsWith("#") && sourceUrl !== null && !resolved);
+        (!href.startsWith("#") && !isWellKnownSafeScheme(href) && sourceUrl !== null && !resolved);
       const rel = String($(element).attr("rel") ?? "")
         .toLowerCase()
         .split(/\s+/)

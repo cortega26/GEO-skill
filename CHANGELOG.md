@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Bug Fixes
+
+- P22: `hasSelfHreflang` no longer fails when source URL and hreflang href
+  differ only by a trailing slash
+- P23: `mailto:`, `tel:`, `fax:`, and `sms:` links are no longer classified as
+  invalid link targets
+- O24: profile detector now recognizes Spanish service/consulting vocabulary
+  (`consultor`, `servicios profesionales`, `consultoría`, etc.)
+
 ## [2.1.2](https://github.com/cortega26/geo-opt/compare/v2.1.1...v2.1.2) (2026-06-30)
 
 

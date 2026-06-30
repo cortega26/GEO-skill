@@ -288,12 +288,16 @@ export function detectProfile(content, filepath = "") {
   }
 
   // ── Signals for service/consulting ──
+  // Patterns include Spanish equivalents so that bilingual and Spanish-only
+  // consulting/service pages are detected with the same confidence as English
+  // ones.  Each regex covers the same semantic cluster in both languages so
+  // that a bilingual page doesn't double-count the same signal.
   const serviceSignals = [
-    /\b(consulting|consultancy|agency|professional\s*services?)\b/i,
-    /\b(our\s*clients|client\s*testimonials|case\s*studies)\b/i,
-    /\b(contact\s*us|get\s*in\s*touch|schedule\s*a\s*call)\b/i,
-    /\b(strategy|consulting\s*services|digital\s*transformation)\b/i,
-    /\b(portfolio|our\s*work|projects?)\b/i,
+    /\b(consulting|consultancy|consultor(?:ía|es)?|agency|agencia|professional\s*services?|servicios?\s*profesionales?)\b/i,
+    /\b(our\s*clients|nuestros?\s*clientes?|client\s*testimonials|testimonios?\s*de\s*clientes?|case\s*stud(?:y|ies)|casos?\s*de\s*é?xito)\b/i,
+    /\b(contact\s*us|contáct?anos?|get\s*in\s*touch|schedule\s*a\s*call|agenda\s*una?\s*(llamada|reunión|consulta)|solicit[aa]\s*(una\s*)?(consulta|demo|llamada|presupuesto))\b/i,
+    /\b(strategy|estrategia|consulting\s*services|servicios?\s*de\s*consultoría|digital\s*transformation|transformación\s*digital|ofrecemos?\s*servicios)\b/i,
+    /\b(portfolio|portafolio|our\s*work|nuestro\s*trabajo|proyectos?)\b/i,
   ];
 
   const serviceCount = serviceSignals.filter((re) => re.test(content)).length;

@@ -244,6 +244,45 @@ describe("detectProfile", () => {
     const result = detectProfile(content, "cli.md");
     assert.equal(result.profile, "documentation");
   });
+
+  it("detects service/consulting from Spanish content with consulting vocabulary", () => {
+    const spanishService = `# Servicios de Consultoría
+
+Somos una agencia de consultoría digital enfocada en transformación digital.
+Nuestros clientes confían en nosotros para servicios profesionales de estrategia.
+
+## Portafolio
+
+Consulte nuestros proyectos y casos de éxito.
+
+## Contacto
+
+Contáctanos para agendar una consulta sin costo.`;
+    const result = detectProfile(spanishService, "servicios.md");
+    assert.equal(
+      result.profile,
+      "service",
+      `Expected "service" but got "${result.profile}" with confidence ${result.confidence}. Reasons: ${result.reasons.join("; ")}`
+    );
+    assert.ok(result.confidence >= 0.7, `confidence ${result.confidence} should be >= 0.7`);
+  });
+
+  it("detects service/consulting from Spanish hero content (consultor, servicios, ofrezco)", () => {
+    const spanishHero = `# Consultor SEO Independiente
+
+Ofrezco servicios de consultoría SEO para pequeñas y medianas empresas.
+Como consultor con más de 10 años de experiencia, ayudo a mis clientes a
+mejorar su visibilidad en buscadores.
+
+Solicita una consulta gratuita hoy mismo.`;
+    const result = detectProfile(spanishHero, "consultor.md");
+    assert.equal(
+      result.profile,
+      "service",
+      `Expected "service" but got "${result.profile}" with confidence ${result.confidence}. Reasons: ${result.reasons.join("; ")}`
+    );
+    assert.ok(result.confidence >= 0.7);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -69,7 +69,7 @@ describe("technical HTML audit", () => {
     assert.equal(report.observations.links.internalCount, 2);
   });
 
-  it("treats non-http URI scheme links as invalid", () => {
+  it("treats dangerous URI schemes (data:, javascript:, vbscript:) as invalid but exempts well-known contact schemes", () => {
     const report = auditTechnicalHtml(
       `
         <html><body>
@@ -83,6 +83,85 @@ describe("technical HTML audit", () => {
     );
     assert.equal(report.observations.links.invalidCount, 3);
     assert.equal(report.observations.links.internalCount, 1);
+  });
+
+  it("treats mailto:, tel:, fax:, and sms: links as safe (not invalid)", () => {
+    const report = auditTechnicalHtml(
+      `
+        <html><body>
+          <a href="mailto:user@example.com">Email</a>
+          <a href="mailto:user@example.com?subject=Hello">Email with subject</a>
+          <a href="tel:+15551234567">Call</a>
+          <a href="fax:+15551234568">Fax</a>
+          <a href="sms:+15551234567">SMS</a>
+          <a href="/about">Internal</a>
+        </body></html>
+      `,
+      { sourceUrl: "https://example.com/guide" }
+    );
+    assert.equal(
+      finding(report, "technical.internal_links").status,
+      "pass",
+      "mailto:/tel:/fax:/sms: should not trigger invalid-link warnings"
+    );
+    assert.equal(report.observations.links.invalidCount, 0);
+    assert.equal(report.observations.links.internalCount, 1);
+  });
+
+  it("detects hasSelfHreflang even when source URL and hreflang differ by trailing slash", () => {
+    // Source URL has trailing slash, hreflang does not
+    const slashSource = auditTechnicalHtml(
+      `
+        <html lang="en">
+        <head>
+          <link rel="alternate" hreflang="en" href="https://example.com/en/guide" />
+        </head>
+        <body><main><h1>Guide</h1><p>Page content with enough words for the minimum threshold.</p></main></body>
+        </html>
+      `,
+      { sourceUrl: "https://example.com/en/guide/" }
+    );
+    assert.equal(
+      slashSource.observations.language.hasSelfHreflang,
+      true,
+      "should match despite trailing-slash mismatch (source has slash, hreflang does not)"
+    );
+
+    // Source URL without trailing slash, hreflang has it
+    const slashHreflang = auditTechnicalHtml(
+      `
+        <html lang="en">
+        <head>
+          <link rel="alternate" hreflang="en" href="https://example.com/en/guide/" />
+        </head>
+        <body><main><h1>Guide</h1><p>Page content with enough words for the minimum threshold.</p></main></body>
+        </html>
+      `,
+      { sourceUrl: "https://example.com/en/guide" }
+    );
+    assert.equal(
+      slashHreflang.observations.language.hasSelfHreflang,
+      true,
+      "should match despite trailing-slash mismatch (hreflang has slash, source does not)"
+    );
+
+    // Both with consistent trailing slash — should still work
+    const consistent = auditTechnicalHtml(
+      `
+        <html lang="en">
+        <head>
+          <link rel="alternate" hreflang="en" href="https://example.com/en/guide/" />
+        </head>
+        <body><main><h1>Guide</h1><p>Page content with enough words for the minimum threshold.</p></main></body>
+        </html>
+      `,
+      { sourceUrl: "https://example.com/en/guide/" }
+    );
+    assert.equal(
+      consistent.observations.language.hasSelfHreflang,
+      true,
+      "should match when both have trailing slashes"
+    );
   });
 
   it("describes an empty app shell without declaring it broken", () => {

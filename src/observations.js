@@ -15,7 +15,13 @@
 import { marked } from "marked";
 import * as cheerio from "cheerio";
 import { preprocessContent, isHtmlContent, extractHtmlVisibleText } from "./text.js";
-import { hasUnsafeHrefScheme, isFragmentHref, isHttpHref, normalizeHref } from "./url-safety.js";
+import {
+  hasUnsafeHrefScheme,
+  isFragmentHref,
+  isHttpHref,
+  isWellKnownSafeScheme,
+  normalizeHref,
+} from "./url-safety.js";
 
 // Returns the index of the (n+1)-th (0-based) occurrence of needle, or -1.
 function nthIndexOf(haystack, needle, n) {
@@ -819,7 +825,12 @@ function observeLinkQuality(textContent, tokens, htmlMeta = null) {
       const href = normalizeHref($(el).attr("href"));
       if (isHttpHref(href)) {
         externalLinks++;
-      } else if (href && !isFragmentHref(href) && !hasUnsafeHrefScheme(href)) {
+      } else if (
+        href &&
+        !isFragmentHref(href) &&
+        !hasUnsafeHrefScheme(href) &&
+        !isWellKnownSafeScheme(href)
+      ) {
         internalLinks++;
       }
     });
