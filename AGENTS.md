@@ -5,12 +5,16 @@ Canonical instructions for AI coding agents working in this repository.
 
 ## Project
 
-`geo-opt` is a source-available CLI tool for Generative Engine Optimization
-(GEO). It provides a legacy 0–100 heuristic and an experimental,
-profile-aware v2 model characterized against repository fixtures. Neither is a
-ranking or citation predictor. The project also generates, injects, and
-validates JSON-LD Schema.org structured data; audits `robots.txt`; and supports
-`llms.txt`, batch, and CI workflows.
+`geo-opt` is a source-available, AI-discoverability CLI built on three pillars:
+**GEO** (Generative Engine Optimization) for content quality, **structured
+data** (Schema.org JSON-LD), and **technical SEO** (`robots.txt`, `sitemap.xml`,
+hreflang/canonical and crawler policy). GEO is the headline and differentiator;
+structured data and technical SEO are the foundations AI engines depend on. For
+GEO it provides a legacy 0–100 heuristic and an experimental, profile-aware v2
+model characterized against repository fixtures; neither is a ranking or
+citation predictor. It also generates, injects, and validates JSON-LD; audits
+and generates `robots.txt` and `sitemap.xml`; and supports `llms.txt`, batch,
+and CI workflows.
 
 Current releases are source-available under the Tooltician Community License
 1.0, with separate commercial licensing for branding-free use.
@@ -136,6 +140,17 @@ If `.codegraph/` does not exist or CodeGraph reports "not initialized," ask:
   generated structured data.
 - Preserve unrelated working-tree changes. Do not stage or commit files that are
   outside the user's requested scope.
+
+## Defect reporting
+
+When an AI agent driving the bundled skill hits a defect attributable to
+`geo-opt` (crash, contract violation, docs-vs-runtime inconsistency, or other
+unexpected behavior), it should offer the user the option to file a GitHub Issue
+— always optional and user-reviewed. Issues must never include audited content,
+file paths, file names, internal URLs, config values, or secrets; only technical
+metadata (version, Node version, OS, redacted command, error output). This is
+consistent with the telemetry/privacy invariant above. The full protocol lives in
+[`docs/reporting-issues.md`](docs/reporting-issues.md).
 
 ## Changelog policy
 

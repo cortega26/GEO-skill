@@ -23,6 +23,16 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - O24: profile detector now recognizes Spanish service/consulting vocabulary
   (`consultor`, `servicios profesionales`, `consultoría`, etc.)
 
+### Docs
+
+- Reposition the project as a three-pillar AI-discoverability toolkit (GEO +
+  structured data + technical SEO); clarify GEO as the umbrella term across
+  `README.md`, `README.es.md`, `AGENTS.md`, the bundled skill, and the package
+  description
+- Add an optional, privacy-safe agent defect-reporting protocol
+  (`docs/reporting-issues.md`, bundled skill section) plus a redaction notice and
+  an agent-origin checkbox to the bug-report issue template
+
 ## [2.1.2](https://github.com/cortega26/geo-opt/compare/v2.1.1...v2.1.2) (2026-06-30)
 
 

@@ -1,14 +1,20 @@
 ---
 name: geo-optimization
 description: >
-  Audits and optimizes web content for technical discoverability in AI-assisted
-  search and retrieval. Applies structural formatting, evidence density,
-  verified quotations, primary-source citations, and entity clarity based on
-  Generative Engine Optimization (GEO) principles without promising ranking or
-  citation outcomes.
+  Audits and optimizes web content for AI discoverability across three pillars:
+  GEO content quality (structural formatting, evidence density, verified
+  quotations, primary-source citations, entity clarity), Schema.org JSON-LD
+  structured data, and technical SEO (robots.txt, sitemap.xml,
+  hreflang/canonical and crawler policy) — grounded in Generative Engine
+  Optimization (GEO) principles, without promising ranking or citation outcomes.
 ---
 
 # Generative Engine Optimization (GEO) Skill
+
+**Scope:** GEO is the headline, but this skill also covers the structured-data
+(Schema.org JSON-LD) and technical-SEO (`robots.txt`, `sitemap.xml`,
+hreflang/canonical, crawler policy) foundations that AI engines — and
+traditional search — depend on.
 
 > **Implementation note**: This skill is backed by two implementations:
 >
@@ -393,3 +399,44 @@ Set `profile` in `geo_config.json` to lock a profile for Node v2 audits:
   "profile": "documentation"
 }
 ```
+
+---
+
+## Reporting defects (optional, user-confirmed)
+
+If, while using `geo-opt`, you observe a defect **attributable to the tool
+itself** — a crash, a contract violation (missing/wrong output versus documented
+behavior), a docs-vs-runtime inconsistency, or any other unexpected behavior —
+offer the user the chance to report it. This is always optional; declining has
+zero side effects.
+
+This does **not** apply to user input errors the tool handled correctly, or to
+your own reasoning mistakes.
+
+> **Privacy first.** An issue must **never** include audited content, file paths,
+> file names, internal URLs, config values, or secrets — only technical metadata
+> (version, Node version, OS, the exact command with sensitive args redacted, and
+> the error output). This mirrors the project's "100% local, zero telemetry"
+> guarantee: reporting is explicit, user-reviewed sharing, not telemetry.
+
+Protocol:
+
+1. **Surface** the failure plainly (what failed, the command, the error).
+2. **Ask** and proceed only on a clear "yes": *"Do you want to report this as a
+   GitHub Issue to help improve geo-opt?"*
+3. **Deduplicate** first:
+   `gh issue list --repo cortega26/geo-opt --search "<keywords>" --state all`.
+   If a match exists, offer to comment/link instead of opening a new issue.
+4. **Draft** a professional issue mapped to the `bug_report.yml` fields
+   (`version`, `node-version`, `os`, `command`, `expected`, `actual`, `context`),
+   using `geo-opt --version` and `node --version` for metadata.
+5. **Show** the full title and body for review; redact anything sensitive before
+   sending.
+6. **Submit only on explicit confirmation**, preferring the no-auth path — a
+   prefilled URL (`.../issues/new?template=bug_report.yml&...`) the user reviews
+   and submits on GitHub; use `gh issue create --repo cortega26/geo-opt --label
+   bug` only if `gh` is installed and authenticated.
+7. **Never** auto-submit, include secrets, or attach the user's raw files.
+
+The full protocol, privacy rules, and prefilled-URL recipe live in
+[`docs/reporting-issues.md`](../../../docs/reporting-issues.md).

@@ -238,6 +238,17 @@ Considered and intentionally NOT planned (do not re-file without new evidence):
 - **`remark`/`unified` replacing `marked`**: REJECTED for now. `marked` covers
   current needs; revisit only if plugin extensibility becomes necessary.
 
+### Positioning & defect-reporting DX (2026-06-30)
+
+Owner-requested initiative: reframe the product as a three-pillar AI
+discoverability toolkit (GEO + structured data + technical SEO) without renaming
+the package, and add an opt-in, privacy-safe protocol for the agent to offer a
+GitHub Issue when it hits a real `geo-opt` defect.
+
+| Plan | Title | Cat | Priority | Effort | Depends on | Status |
+|---|---|---|---|---|---|---|
+| [057](057-positioning-and-defect-reporting.md) | Reposition as three-pillar AI-discoverability toolkit + optional agent defect-reporting protocol (docs + skill + issue template; no runtime change) | positioning / dx | P2 | M | — | TODO |
+
 ### Deferred (by owner decision 2026-06-27)
 
 | Plan / program | Reason |

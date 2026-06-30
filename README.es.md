@@ -10,7 +10,7 @@
 
 El toolkit de descubribilidad por IA — parte del ecosistema [Tooltician](https://tooltician.com).
 
-`geo-opt` audita Markdown y HTML para mejorar su visibilidad en motores de búsqueda con IA, genera datos estructurados Schema.org JSON-LD, revisa la política de crawlers y produce archivos `llms.txt`, `sitemap.xml` y reportes independientes — todo de forma local, sin telemetría y sin subir tu contenido a ningún servidor.
+`geo-opt` es un toolkit de descubribilidad por IA que abarca tres pilares — calidad de contenido **GEO**, datos estructurados **Schema.org** y **SEO técnico**. Audita Markdown y HTML, genera JSON-LD, revisa la política de crawlers y produce archivos `llms.txt`, `sitemap.xml` y reportes independientes — todo de forma local, sin telemetría y sin subir tu contenido a ningún servidor.
 
 <!-- Build & quality -->
 <p>
@@ -105,6 +105,8 @@ La **Optimización para Motores Generativos (GEO)** es la disciplina de escribir
 
 A diferencia de las herramientas SEO en la nube, cada auditoría, generación de schema y validación se ejecuta en tu máquina. Tu contenido nunca sale de ella.
 
+**Tres pilares, un solo toolkit.** `geo-opt` trata la descubribilidad por IA como tres pilares de primera clase: **GEO** — el núcleo de calidad de contenido que da nombre a la herramienta; **datos estructurados** — Schema.org JSON-LD; y **SEO técnico** — `robots.txt`, `sitemap.xml`, hreflang, canonical y política de crawlers. GEO es el titular y el diferenciador; los datos estructurados y el SEO técnico son los cimientos de los que dependen los motores de IA — y la búsqueda tradicional.
+
 ---
 
 ## Qué hace geo-opt
@@ -158,9 +160,9 @@ node bin/cli.js llmstxt generate contenido/ --recursive --site-url https://ejemp
 node bin/cli.js sitemap generate contenido/ --base-url https://ejemplo.com               # Pro
 ```
 
-### Inspeccionar (técnico)
+### SEO técnico
 
-Audita HTML — archivos locales sin red, o URLs remotas y sitemaps con protecciones SSRF integradas — buscando fundamentos técnicos de SEO/GEO: títulos, meta descripciones, encabezados, etiquetas canónicas y presencia de datos estructurados.
+Audita HTML — archivos locales sin red, o URLs remotas y sitemaps con protecciones SSRF integradas — buscando los fundamentos de SEO técnico de los que dependen los crawlers de IA y de búsqueda: títulos, meta descripciones, encabezados, etiquetas canónicas, hreflang y presencia de datos estructurados.
 
 ```bash
 # HTML local, sin acceso a red

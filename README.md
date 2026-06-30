@@ -10,7 +10,7 @@
 
 The AI-discoverability toolkit — part of the [Tooltician](https://tooltician.com) ecosystem.
 
-`geo-opt` audits Markdown and HTML for AI discoverability, generates Schema.org JSON-LD structured data, reviews crawler policy, and produces `llms.txt`, `sitemap.xml`, and standalone reports — entirely locally, with zero telemetry and no content uploads.
+`geo-opt` is an AI-discoverability toolkit spanning three pillars — **GEO** content quality, **Schema.org** structured data, and **technical SEO**. It audits Markdown and HTML, generates JSON-LD, reviews crawler policy, and produces `llms.txt`, `sitemap.xml`, and standalone reports — entirely locally, with zero telemetry and no content uploads.
 
 <!-- Build & quality -->
 <p>
@@ -93,7 +93,7 @@ Scoring is grounded in the [GEO paper accepted at KDD 2024](https://arxiv.org/ab
     - [Structure](#structure)
     - [Control](#control)
     - [Signal](#signal)
-    - [Inspect (technical)](#inspect-technical)
+    - [Technical SEO](#technical-seo)
     - [Report *(Pro)*](#report-pro)
   - [Quick start](#quick-start)
     - [CI/CD integration](#cicd-integration)
@@ -116,6 +116,8 @@ AI-powered search engines — ChatGPT, Perplexity, Gemini, Grok — don't rank l
 **Generative Engine Optimization (GEO)** is the discipline of writing and presenting content that AI systems can confidently understand and cite. `geo-opt` turns that research into a reproducible, locally-computed score with specific, actionable findings.
 
 Unlike cloud-based SEO tools, every audit, schema generation, and validation runs in-process. Your content never leaves your machine.
+
+**Three pillars, one toolkit.** `geo-opt` treats AI discoverability as three first-class pillars: **GEO** — the content-quality core this tool is named for; **structured data** — Schema.org JSON-LD; and **technical SEO** — `robots.txt`, `sitemap.xml`, hreflang, canonical, and crawler policy. GEO is the headline and the differentiator; structured data and technical SEO are the foundations that AI engines — and traditional search — depend on.
 
 ---
 
@@ -170,9 +172,9 @@ node bin/cli.js llmstxt generate content/ --recursive --site-url https://example
 node bin/cli.js sitemap generate content/ --base-url https://example.com               # Pro
 ```
 
-### Inspect (technical)
+### Technical SEO
 
-Audit HTML — local files offline, or remote URLs and sitemaps with built-in SSRF guards — for technical SEO/GEO fundamentals: titles, meta descriptions, headings, canonical tags, and structured-data presence.
+Audit HTML — local files offline, or remote URLs and sitemaps with built-in SSRF guards — for the technical-SEO fundamentals AI and search crawlers rely on: titles, meta descriptions, headings, canonical tags, hreflang, and structured-data presence.
 
 ```bash
 # Local HTML, no network access
