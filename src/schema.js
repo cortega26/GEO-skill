@@ -57,7 +57,7 @@ export function validateWritableTargetInsideCwd(filepath) {
   if (!isInsideDirectory(targetRealPath, cwdRealPath)) {
     return {
       valid: false,
-      error: `Security restriction — target file ${filepath} resolves outside the current working directory.`,
+      error: `Security restriction — target file ${filepath} resolves outside the current working directory. Run the command from the target directory, or copy the file into the current working directory.`,
     };
   }
 
@@ -92,7 +92,7 @@ export function validateNewFileParentInsideCwd(filepath) {
   if (!isInsideDirectory(parentRealPath, cwdRealPath)) {
     return {
       valid: false,
-      error: `Security restriction — output path ${filepath} resolves outside the current working directory.`,
+      error: `Security restriction — output path ${filepath} resolves outside the current working directory. Run the command from the target directory, or copy the file into the current working directory.`,
     };
   }
 
@@ -136,7 +136,7 @@ export function validateOutputDirInsideCwd(dirPath) {
   if (!isInsideDirectory(target, cwdRealPath)) {
     return {
       valid: false,
-      error: `Security restriction — output directory ${dirPath} resolves outside the current working directory.`,
+      error: `Security restriction — output directory ${dirPath} resolves outside the current working directory. Run the command from the target directory, or copy the file into the current working directory.`,
     };
   }
   return { valid: true };

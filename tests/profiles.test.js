@@ -27,13 +27,14 @@ import {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("PROFILES", () => {
-  it("defines all 6 non-auto profiles", () => {
-    assert.equal(VALID_PROFILES.length, 6);
+  it("defines all 7 non-auto profiles", () => {
+    assert.equal(VALID_PROFILES.length, 7);
     assert.deepEqual(VALID_PROFILES, [
       "documentation",
       "open-source",
       "editorial",
       "commercial",
+      "service",
       "ecommerce",
       "regulated",
     ]);

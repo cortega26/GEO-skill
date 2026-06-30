@@ -133,7 +133,7 @@ describe("validateSchemaFile — comportamiento de validación JSON-LD", () => {
   it("informa tipo desconocido como nota, no como error bloqueante", () => {
     const schema = JSON.stringify({
       "@context": "https://schema.org",
-      "@type": "WebPage",
+      "@type": "SomeCustomType",
     });
     const file = join(dir, "unknown-type.md");
     writeFileSync(file, "```json\n" + schema + "\n```\n");

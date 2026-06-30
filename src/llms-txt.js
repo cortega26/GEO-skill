@@ -92,8 +92,36 @@ export function resolvePageUrl(filepath, baseDir, siteUrl, opts = {}) {
   }
   // Normalize to forward slashes
   rel = withoutExt.split(path.sep).join("/");
+  // Ensure trailing slash for directory URLs (index pages resolved to parent dir)
+  if (rel !== "" && !rel.endsWith("/") && !path.extname(rel)) {
+    rel += "/";
+  }
   if (rel === "") return cleanBase + "/";
   return `${cleanBase}/${rel}`;
+}
+
+/**
+ * Find the longest common base directory shared by all given file paths.
+ * Falls back to process.cwd() when no common prefix exists.
+ *
+ * @param {string[]} filePaths - list of absolute or relative file paths
+ * @returns {string} the common base directory
+ */
+export function findCommonBaseDir(filePaths) {
+  if (filePaths.length === 0) return process.cwd();
+  if (filePaths.length === 1) return path.dirname(path.resolve(filePaths[0]));
+
+  const dirs = filePaths.map((fp) => path.dirname(path.resolve(fp)).split(path.sep));
+  const common = [];
+  for (let i = 0; i < dirs[0].length; i++) {
+    const seg = dirs[0][i];
+    if (dirs.every((d) => i < d.length && d[i] === seg)) {
+      common.push(seg);
+    } else {
+      break;
+    }
+  }
+  return common.length > 0 ? common.join(path.sep) : process.cwd();
 }
 
 // ---- llms.txt generation ----

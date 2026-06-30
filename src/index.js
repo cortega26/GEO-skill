@@ -80,6 +80,7 @@ export { validateSchema, validateSchemaFile } from "./validate.js";
 export {
   extractPageMetadata,
   resolvePageUrl,
+  findCommonBaseDir,
   suggestSection,
   generateLlmsTxt,
   generateLlmsFullTxt,

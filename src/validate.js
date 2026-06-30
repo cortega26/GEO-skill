@@ -5,10 +5,19 @@ import fs from "fs";
 const REQUIRED_FIELDS = {
   Article: ["headline"],
   NewsArticle: ["headline", "datePublished"],
+  BlogPosting: ["headline"],
+  TechArticle: ["headline"],
+  DiscussionForumPosting: ["headline"],
+  SocialMediaPosting: ["headline"],
   FAQPage: ["mainEntity"],
   Product: ["name"],
   Organization: ["name"],
   Person: ["name"],
+  WebPage: ["name"],
+  BreadcrumbList: ["itemListElement"],
+  SoftwareApplication: ["name", "applicationCategory"],
+  ImageObject: ["url"],
+  VideoObject: ["name", "description"],
   // Pro types
   Course: ["name", "description"],
   Event: ["name", "startDate"],
@@ -38,23 +47,31 @@ export function validateSchema(parsed) {
   }
 
   for (const node of nodes) {
-    const type = node["@type"];
-    if (!type) {
+    const rawType = node["@type"];
+    if (!rawType) {
       errors.push("Node without @type found — all schema.org nodes require @type");
       continue;
     }
 
-    const required = REQUIRED_FIELDS[type];
-    if (required) {
-      for (const field of required) {
-        if (node[field] === undefined || node[field] === null || node[field] === "") {
-          errors.push(`${type} is missing required field "${field}"`);
+    // Split multi-value types like "Person,ProfessionalService" and check each
+    const types = String(rawType)
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+
+    for (const type of types) {
+      const required = REQUIRED_FIELDS[type];
+      if (required) {
+        for (const field of required) {
+          if (node[field] === undefined || node[field] === null || node[field] === "") {
+            errors.push(`${type} is missing required field "${field}"`);
+          }
         }
+      } else {
+        notes.push(
+          `"${type}" is not in the known-types list (${Object.keys(REQUIRED_FIELDS).join(", ")})`
+        );
       }
-    } else {
-      notes.push(
-        `"${type}" is not in the known-types list (${Object.keys(REQUIRED_FIELDS).join(", ")})`
-      );
     }
   }
 

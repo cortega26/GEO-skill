@@ -21,6 +21,72 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **P1 — npm install desde GitHub roto.** El script `prepare` ahora tolera la
+  ausencia de `.git/hooks/` (ocurre en instalaciones desde URL de GitHub que
+  clonan sin `.git/`). Se agregó `scripts/` al campo `files` del `package.json`
+  para que `prepack` pueda ejecutar `build.js`. Se agregó un guardia `preinstall`
+  que verifica la existencia de `dist/bin/cli.js` y da un mensaje claro si falta.
+- **P2 — --help sin output cuando falta dist/.** Se agregó un bloque try/catch
+  alrededor de `program.parse()` que detecta errores `ENOENT`/`MODULE_NOT_FOUND`
+  y muestra un mensaje amigable sugiriendo ejecutar `npm run build`.
+- **P3 — Resolución de URLs dependiente del CWD.** Se creó `findCommonBaseDir()`
+  en `src/llms-txt.js` que encuentra el prefijo común de todos los archivos de
+  entrada. Los comandos `sitemap generate`, `llmstxt generate` y `generate-all`
+  ahora usan este directorio base en vez de `process.cwd()` para generar URLs.
+- **P5 — Nombres de flags inconsistentes para URL base.** `--base-url` es ahora
+  el flag canónico en `llmstxt generate` y `generate-all`. `--site-url` se
+  mantiene como alias oculto para retrocompatibilidad. `sitemap generate` ya
+  usaba `--base-url`. `--source-url` en `technical` se mantiene por tener
+  semántica distinta.
+- **P6 — JSON-LD "not applicable" se muestra como ✗.** El icono para hallazgos
+  con status `not_applicable` ahora es `○` (neutro) en vez de `✗` (fallo).
+- **P7 — Perfil "Service / Consulting".** Nuevo perfil `service` para sitios de
+  consultoría y servicios profesionales, con dimensiones `structure, statistics,
+  citations, clarity`. Se agregó flag `--profile` al comando `audit` para forzar
+  un perfil manualmente.
+- **P9 — `technical` con directorio muestra error EISDIR crudo.** Se agregó
+  flag `-r/--recursive` al comando `technical`. Sin `-r`, pasar un directorio
+  produce un mensaje amigable. Con `-r`, se expande el directorio buscando
+  archivos `.html`/`.htm`.
+- **P10 — `--url http://` sugiere flags incorrectos.** La validación de URLs
+  ahora distingue entre `localhost`, IPs privadas y HTTP público, sugiriendo
+  `--allow-localhost`, `--allow-private` o `--allow-http` según corresponda.
+  Se agregó el flag `--allow-http`.
+- **P11 — `technical` duplica línea "Target:" con URLs remotas.** Corregida
+  la condición para mostrar la segunda línea "Target:" — ahora solo aparece
+  cuando existe `file` y `target` y son distintos.
+- **P12 — `validate` falsos positivos con tipos multi-value y tipos no
+  listados.** Se agregó soporte para tipos compuestos separados por coma
+  (`Person,ProfessionalService`). Se amplió `REQUIRED_FIELDS` con 8 tipos
+  adicionales de Schema.org (`BlogPosting`, `TechArticle`, `WebPage`,
+  `BreadcrumbList`, `SoftwareApplication`, `ImageObject`, `VideoObject`,
+  `DiscussionForumPosting`, `SocialMediaPosting`).
+- **P13 — Tip para `sitemap generate --audit`.** Cuando no se usa `--audit`,
+  se muestra un tip sugiriendo usarlo para prioridades basadas en GEO score.
+- **P14/P21 — URLs sin trailing slash para directorios.** `resolvePageUrl()` y
+  los comandos de generación ahora añaden trailing slash a URLs que representan
+  directorios (archivos `index.*` resueltos a su directorio padre).
+- **P15 — 404.html incluido en el sitemap.** `sitemap generate` ahora filtra
+  archivos con nombres `404.html`, `404.md`, `404.htm` y `500.html`.
+- **P16 — Error confuso con `--ignore` después de archivos.** El mensaje "No
+  matching files found" ahora incluye una explicación de cómo ordenar
+  correctamente los argumentos con `--ignore`.
+- **P17 — Fallback de `--title` incluye `config.siteName`.** Se agregó
+  `config.siteName` como opción adicional en la cadena de fallback del título
+  en `llmstxt generate` y `generate-all`.
+- **P18 — Ruta de output con `../../..`.** `emitTechnicalResults` ahora muestra
+  la ruta absoluta (`path.resolve()`) en vez de la relativa.
+- **P19 — Error de seguridad sin sugerencia.** Los mensajes de restricción de
+  seguridad en `src/schema.js` ahora incluyen una sugerencia para resolver el
+  problema.
+- **P20 — `badge --format` acepta `text` como alias.** El flag `--format text`
+  ahora es equivalente a `--format markdown` para consistencia con
+  `audit`/`technical`.
+- **P8e — `init --dry-run`.** El comando `init` ahora soporta `--dry-run` para
+  previsualizar el archivo de configuración sin escribirlo.
+
 ### Changed
 
 - **v2 is now the default scoring model.** `--model v2` is no longer needed for

@@ -66,6 +66,16 @@ export const PROFILES = Object.freeze({
     applicableDimensions: ["structure", "statistics", "citations", "clarity"],
   },
 
+  service: {
+    id: "service",
+    label: "Service / Consulting",
+    description:
+      "Consulting, agency, or professional service pages. " +
+      "Valued for structure, attributed claims, external citations, and clear prose. " +
+      "Quotations from client testimonials are accepted but not required.",
+    applicableDimensions: ["structure", "statistics", "citations", "clarity"],
+  },
+
   ecommerce: {
     id: "ecommerce",
     label: "E-Commerce",
@@ -277,6 +287,25 @@ export function detectProfile(content, filepath = "") {
     };
   }
 
+  // ── Signals for service/consulting ──
+  const serviceSignals = [
+    /\b(consulting|consultancy|agency|professional\s*services?)\b/i,
+    /\b(our\s*clients|client\s*testimonials|case\s*studies)\b/i,
+    /\b(contact\s*us|get\s*in\s*touch|schedule\s*a\s*call)\b/i,
+    /\b(strategy|consulting\s*services|digital\s*transformation)\b/i,
+    /\b(portfolio|our\s*work|projects?)\b/i,
+  ];
+
+  const serviceCount = serviceSignals.filter((re) => re.test(content)).length;
+  if (serviceCount >= 3) {
+    reasons.push(`matched ${serviceCount} service/consulting patterns`);
+    return {
+      profile: "service",
+      confidence: Math.min(0.85, 0.5 + serviceCount * 0.1),
+      reasons,
+    };
+  }
+
   // ── Weak signals → default to editorial ──
   // Editorial is the broadest profile — it applies all dimensions, so it's
   // the safe default when nothing specific is detected.
@@ -288,7 +317,8 @@ export function detectProfile(content, filepath = "") {
         "ecommerce (product prices, buy buttons, shopping carts), " +
         "documentation (code blocks, API references, CLI examples), " +
         "open-source (README, license badges, GitHub links), " +
-        "commercial-landing (CTAs, testimonials, pricing tables). " +
+        "commercial-landing (CTAs, testimonials, pricing tables), " +
+        "service/consulting (portfolio, case studies, contact CTAs). " +
         "Add matching signals to improve detection confidence."
     );
   }

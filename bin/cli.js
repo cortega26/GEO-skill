@@ -31,6 +31,8 @@ import {
   setRemindersEnabled,
   validateSchemaFile,
   generateSitemapXml,
+  resolvePageUrl,
+  findCommonBaseDir,
   fetchUrl,
   fetchRobotsTxt,
   checkRobotsRule,
@@ -106,12 +108,21 @@ program
   .option("-s, --summary", "Show aggregate site report (JSON only)")
   .option("--explain", "Show evidence labels and sources alongside findings")
   .option(
+    "--profile <name>",
+    "Force a specific profile for scoring (e.g. service, commercial, editorial)"
+  )
+  .option(
     "-m, --model <version>",
     "Scoring model: v2 (default, profile-aware) or v1 (legacy)",
     "v2"
   )
   .action((files, options, cmd) => {
     const config = resolveConfig(cmd);
+
+    // CLI --profile overrides config.profile
+    if (options.profile) {
+      config.profile = options.profile;
+    }
 
     if (!files || files.length === 0) {
       if (options.recursive) {
@@ -170,7 +181,12 @@ program
     }
 
     if (discovered.length === 0) {
-      console.error("No matching files found.");
+      console.error(
+        "No matching files found.\n" +
+          "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+          '  geo-opt <command> <files...> --ignore "pattern"   ✅\n' +
+          '  geo-opt <command> --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+      );
       process.exit(1);
     }
 
@@ -342,17 +358,35 @@ sitemapCmd
     }
 
     if (discovered.length === 0) {
-      console.error("No matching files found.");
+      console.error(
+        "No matching files found.\n" +
+          "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+          '  geo-opt <command> <files...> --ignore "pattern"   ✅\n' +
+          '  geo-opt <command> --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+      );
       process.exit(1);
     }
 
     const baseUrl = options.baseUrl || config.siteUrl || "";
+    // Encontrar el directorio base común de todos los archivos
+    const commonBase = findCommonBaseDir(discovered);
 
     // Build sitemap entries from discovered files
     const entries = [];
     for (const fp of discovered) {
-      // Resolve URL relative to site base
-      const rel = path.relative(process.cwd(), fp).split(path.sep).join("/");
+      // Filtrar páginas de error
+      const basename = path.basename(fp).toLowerCase();
+      if (
+        basename === "404.html" ||
+        basename === "404.md" ||
+        basename === "404.htm" ||
+        basename === "500.html"
+      ) {
+        continue;
+      }
+
+      // Resolve URL relative to common base (not CWD)
+      const rel = path.relative(commonBase, fp).split(path.sep).join("/");
       const ext = path.extname(rel);
       let urlPath = rel.slice(0, -ext.length);
       if (path.basename(urlPath) === "index") {
@@ -360,8 +394,14 @@ sitemapCmd
       }
       if (urlPath === "." || urlPath === "") {
         urlPath = "/";
-      } else if (!urlPath.startsWith("/")) {
-        urlPath = "/" + urlPath;
+      } else {
+        if (!urlPath.startsWith("/")) {
+          urlPath = "/" + urlPath;
+        }
+        // Asegurar trailing slash para rutas de directorio (P14/P21)
+        if (!urlPath.endsWith("/") && !path.extname(urlPath)) {
+          urlPath += "/";
+        }
       }
 
       const entry = {
@@ -381,6 +421,13 @@ sitemapCmd
       }
 
       entries.push(entry);
+    }
+
+    // Tip: usar --audit para prioridades basadas en GEO score (P13)
+    if (!options.audit && !options.dryRun && entries.length > 0) {
+      console.warn(
+        chalk.dim("Tip: Use --audit to compute GEO score-based priorities instead of defaults.")
+      );
     }
 
     const sitemapXml = generateSitemapXml(entries, { baseUrl });
@@ -456,7 +503,8 @@ llmstxtCmd
   .option("-r, --recursive", "Recursively scan directories")
   .option("--ignore <patterns...>", "Additional ignore patterns (gitignore syntax)")
   .option("--output <dir>", "Output directory", ".")
-  .option("--site-url <url>", "Base URL of the site (e.g. https://example.com)")
+  .option("--base-url <url>", "Base URL of the site (e.g. https://example.com)")
+  .option("--site-url <url>", "", "") // hidden backward-compat alias
   .option("--title <name>", "Site name (default: from config or directory name)")
   .option("--description <text>", "Site description (default: from config)")
   .option("--full", "Also generate llms-full.txt with complete page content")
@@ -489,13 +537,19 @@ llmstxtCmd
     }
 
     if (discovered.length === 0) {
-      console.error("No matching files found.");
+      console.error(
+        "No matching files found.\n" +
+          "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+          '  geo-opt <command> <files...> --ignore "pattern"   ✅\n' +
+          '  geo-opt <command> --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+      );
       process.exit(1);
     }
 
     // Extract metadata from each file
-    const siteUrl = options.siteUrl || config.siteUrl || "";
-    const siteTitle = options.title || config.publisher?.name || path.basename(process.cwd());
+    const siteUrl = options.baseUrl || options.siteUrl || config.siteUrl || "";
+    const siteTitle =
+      options.title || config.siteName || config.publisher?.name || path.basename(process.cwd());
     const siteDescription = options.description || config.siteDescription || "";
 
     const entries = [];
@@ -508,31 +562,14 @@ llmstxtCmd
         // Determine section from content signals or directory context
         const section = suggestSection(fp, content);
 
-        // Resolve URL
+        // Resolve URL — usa el directorio base común para evitar rutas ../ (P3)
         const stripPrefix = options.stripPrefix || "";
+        const commonBase = findCommonBaseDir(discovered);
         let url = "";
         if (siteUrl) {
-          let rel = path.relative(process.cwd(), fp).split(path.sep).join("/");
-          // Apply --strip-prefix: remove the prefix from the relative path
-          if (stripPrefix) {
-            const prefix = stripPrefix.replace(/\/+$/, "") + "/";
-            if (rel.startsWith(prefix)) {
-              rel = rel.slice(prefix.length);
-            }
-          }
-          const ext = path.extname(rel);
-          let withoutExt = rel.slice(0, -ext.length);
-          if (path.basename(withoutExt) === "index") {
-            withoutExt = path.dirname(withoutExt);
-          }
-          if (withoutExt === "." || withoutExt === "") {
-            url = siteUrl.replace(/\/+$/, "") + "/";
-          } else {
-            url = siteUrl.replace(/\/+$/, "") + "/" + withoutExt;
-          }
+          url = resolvePageUrl(fp, commonBase, siteUrl, { stripPrefix });
         } else {
-          const relDir = path.relative(process.cwd(), path.dirname(fp));
-          url = relDir + "/" + path.basename(fp);
+          url = resolvePageUrl(fp, commonBase, "", { stripPrefix });
         }
 
         entries.push({
@@ -751,7 +788,12 @@ program
         process.exit(1);
       }
       if (fileList.length === 0) {
-        console.error("No matching files found.");
+        console.error(
+          "No matching files found.\n" +
+            "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+            '  geo-opt <command> <files...> --ignore "pattern"   ✅\n' +
+            '  geo-opt <command> --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+        );
         process.exit(1);
       }
     } else {
@@ -854,12 +896,9 @@ program
   .command("init")
   .description("Scaffold a geo_config.json template in the current directory")
   .option("--force", "Overwrite if geo_config.json already exists")
+  .option("--dry-run", "Preview the config file without writing it")
   .action((options) => {
     const targetPath = path.join(process.cwd(), "geo_config.json");
-    if (fs.existsSync(targetPath) && !options.force) {
-      console.error(`Error: ${targetPath} already exists. Use --force to overwrite.`);
-      process.exit(1);
-    }
 
     const template = {
       author: {
@@ -889,6 +928,23 @@ program
       },
       allowedExtensions: [".md", ".html", ".htm"],
     };
+
+    // --dry-run: mostrar el template sin escribir
+    if (options.dryRun) {
+      if (fs.existsSync(targetPath)) {
+        console.warn(
+          chalk.yellow(`Note: ${targetPath} already exists (would be overwritten with --force).`)
+        );
+      }
+      console.log("=== geo_config.json preview (--dry-run) ===");
+      console.log(JSON.stringify(template, null, 2));
+      return;
+    }
+
+    if (fs.existsSync(targetPath) && !options.force) {
+      console.error(`Error: ${targetPath} already exists. Use --force to overwrite.`);
+      process.exit(1);
+    }
 
     try {
       fs.writeFileSync(targetPath, JSON.stringify(template, null, 2) + "\n", {
@@ -952,7 +1008,12 @@ program
     }
 
     if (discovered.length === 0) {
-      console.error("No matching files found.");
+      console.error(
+        "No matching files found.\n" +
+          "If you used --ignore, place file paths BEFORE --ignore patterns:\n" +
+          '  geo-opt <command> <files...> --ignore "pattern"   ✅\n' +
+          '  geo-opt <command> --ignore "pattern" <files...>   ❌ (file consumed as pattern)'
+      );
       process.exit(1);
     }
 
@@ -1020,7 +1081,8 @@ program
   .option("-r, --recursive", "Recursively scan subdirectories")
   .option("--ignore <patterns...>", "Additional ignore patterns")
   .option("--output <dir>", "Output directory", "geo-package")
-  .option("--site-url <url>", "Base URL of the site (e.g. https://example.com)")
+  .option("--base-url <url>", "Base URL of the site (e.g. https://example.com)")
+  .option("--site-url <url>", "", "") // hidden backward-compat alias
   .option("--title <name>", "Site name")
   .option("--description <text>", "Site description")
   .option("--model <version>", "Audit scoring model: v2 (default) or v1", "v2")
@@ -1030,8 +1092,9 @@ program
     const config = resolveConfig(cmd);
     const inputDirs = dir ? [dir] : ["."];
     const outDir = path.resolve(options.output);
-    const siteUrl = options.siteUrl || config.siteUrl || "";
-    const siteTitle = options.title || config.publisher?.name || path.basename(process.cwd());
+    const siteUrl = options.baseUrl || options.siteUrl || config.siteUrl || "";
+    const siteTitle =
+      options.title || config.siteName || config.publisher?.name || path.basename(process.cwd());
     const siteDescription = options.description || config.siteDescription || "";
     const model = resolveModel(options.model);
 
@@ -1077,6 +1140,8 @@ program
 
     const scoreEntries = [];
     const fullEntries = [];
+    // Encontrar el directorio base común para URLs limpias (P3)
+    const commonBase = findCommonBaseDir(files);
     for (const r of auditResults) {
       if (r.status === "success" && r.report) {
         const score = r.score ?? r.report.total_score ?? r.report.effectiveScore;
@@ -1088,20 +1153,9 @@ program
         const content = r.content;
         const { title } = extractPageMetadata(content, r.file);
         const stripPrefix = options.stripPrefix || "";
-        let rel = path.relative(process.cwd(), r.file).split(path.sep).join("/");
-        // Apply --strip-prefix: remove the prefix from the relative path
-        if (stripPrefix) {
-          const prefix = stripPrefix.replace(/\/+$/, "") + "/";
-          if (rel.startsWith(prefix)) {
-            rel = rel.slice(prefix.length);
-          }
-        }
-        const ext = path.extname(rel);
-        let urlPath = rel.slice(0, -ext.length);
-        if (path.basename(urlPath) === "index") urlPath = path.dirname(urlPath);
-        if (urlPath === ".") urlPath = "/";
-        else if (!urlPath.startsWith("/")) urlPath = "/" + urlPath;
-        const url = siteUrl ? siteUrl.replace(/\/+$/, "") + urlPath : urlPath;
+        const url = siteUrl
+          ? resolvePageUrl(r.file, commonBase, siteUrl, { stripPrefix })
+          : resolvePageUrl(r.file, commonBase, "", { stripPrefix });
         const section = suggestSection(r.file, content);
         const score = r.score ?? r.report?.total_score ?? r.report?.effectiveScore ?? undefined;
         fullEntries.push({ file: r.file, title, url, section, content, score });
@@ -1215,6 +1269,7 @@ program
       "  links, structured data consistency, and app-shell detection.\n" +
       "  Local files: no network access. Remote mode: --url or --sitemap."
   )
+  .option("-r, --recursive", "Recursively scan directories for HTML files")
   .option("--source-url <url>", "Base URL for resolving relative links in local HTML")
   .option("-f, --format <type>", "Output format: text or json", "text")
   .option("-o, --output <file>", "Write JSON report to file (json format only)")
@@ -1227,9 +1282,10 @@ program
   .option("--max-size <bytes>", "Max response size in bytes", String(MAX_RESPONSE_SIZE))
   .option("--allow-private", "Allow connections to private IP ranges")
   .option("--allow-localhost", "Allow connections to loopback addresses")
+  .option("--allow-http", "Allow connections to public HTTP URLs (not recommended)")
   .option("--no-robots", "Skip robots.txt check in sitemap mode")
   .action((files, options, cmd) => {
-    resolveConfig(cmd);
+    const config = resolveConfig(cmd);
 
     // Commander retorna string para --url único, array para múltiples
     const remoteUrls = options.url || [];
@@ -1256,10 +1312,29 @@ program
       process.exit(1);
     }
 
-    // ── Modo local (Phase 1 — sin cambios de comportamiento) ──
+    // ── Modo local ──
     if (hasLocalFiles) {
+      // Expandir directorios si --recursive está activo
       if (options.recursive) {
-        console.warn(chalk.yellow("Warning: --recursive has no effect in local file mode."));
+        files = discoverFiles(files, {
+          recursive: true,
+          ignorePatterns: [],
+          allowedExtensions: new Set([".html", ".htm"]),
+          cwd: process.cwd(),
+          config,
+        });
+      }
+
+      // Verificar que no se pasaron directorios sin --recursive
+      for (const file of files) {
+        try {
+          if (fs.statSync(file).isDirectory()) {
+            console.error(`Error: "${file}" is a directory. Use --recursive to scan directories.`);
+            process.exit(1);
+          }
+        } catch {
+          // Se capturará abajo como error de lectura
+        }
       }
 
       // --url y --sitemap flags no deberían estar presentes con archivos locales
@@ -1273,10 +1348,10 @@ program
       }
 
       // Los flags de red no aplican a modo local
-      if (options.allowPrivate || options.allowLocalhost || options.noRobots) {
+      if (options.allowPrivate || options.allowLocalhost || options.allowHttp || options.noRobots) {
         console.warn(
           chalk.yellow(
-            "Warning: --allow-private, --allow-localhost, and --no-robots have no effect in local file mode."
+            "Warning: --allow-private, --allow-localhost, --allow-http, and --no-robots have no effect in local file mode."
           )
         );
       }
@@ -1335,7 +1410,7 @@ function emitTechnicalResults(results, options) {
         console.error(`Error: Failed to write ${outPath}: ${e.message}`);
         process.exit(1);
       }
-      console.log(`✓ Technical audit report written → ${path.relative(process.cwd(), outPath)}`);
+      console.log(`✓ Technical audit report written → ${path.resolve(outPath)}`);
     } else {
       console.log(output);
     }
@@ -1353,7 +1428,7 @@ function emitTechnicalResults(results, options) {
     console.log(chalk.bold.blue("══════════════════════════════════════════════════"));
     const label = r.file ? `File:   ${r.file}` : `Target: ${r.target}`;
     console.log(chalk.bold(label));
-    if (r.target && r.target !== r.file) {
+    if (r.file && r.target && r.target !== r.file) {
       console.log(chalk.dim(`Target: ${r.target}`));
     }
     console.log(chalk.bold.blue("──────────────────────────────────────────────────"));
@@ -1366,7 +1441,9 @@ function emitTechnicalResults(results, options) {
             ? chalk.green("✓")
             : f.status === "warn"
               ? chalk.yellow("⚠")
-              : chalk.red("✗");
+              : f.status === "not_applicable"
+                ? chalk.dim("○")
+                : chalk.red("✗");
         console.log(`  ${icon} [${f.ruleId}] ${f.message}`);
         if (f.remediation) {
           console.log(chalk.dim(`     Fix: ${f.remediation}`));
@@ -1478,6 +1555,7 @@ async function handleRemoteTechnical(options) {
 
   const allowPrivate = options.allowPrivate || false;
   const allowLocalhost = options.allowLocalhost || false;
+  const allowHttp = options.allowHttp || false;
   const checkRobots = options.robots !== false;
 
   const fetchOptions = {
@@ -1490,12 +1568,25 @@ async function handleRemoteTechnical(options) {
   // ── Modo --url ──
   if (remoteUrls.length > 0 && !sitemapUrl) {
     // Requerir https:// para URLs explícitas, salvo que el usuario
-    // haya levantado restricciones con --allow-localhost o --allow-private.
-    if (!allowPrivate && !allowLocalhost) {
+    // haya levantado restricciones con los flags correspondientes.
+    if (!allowPrivate && !allowLocalhost && !allowHttp) {
       for (const url of remoteUrls) {
         if (!url.startsWith("https://")) {
+          let suggestion;
+          try {
+            const host = new URL(url).hostname;
+            if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
+              suggestion = "--allow-localhost";
+            } else if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+              suggestion = "--allow-private";
+            } else {
+              suggestion = "--allow-http";
+            }
+          } catch {
+            suggestion = "--allow-private, --allow-localhost, or --allow-http";
+          }
           console.error(
-            `Error: --url requires https:// scheme: "${url}". Use --allow-private or --allow-localhost for http://.`
+            `Error: --url requires https:// scheme: "${url}". Use ${suggestion} for http://.`
           );
           process.exit(1);
         }
@@ -1743,6 +1834,10 @@ program
   .action((file, options, cmd) => {
     const config = resolveConfig(cmd);
     const model = resolveModel(options.model);
+    // Alias: --format text → markdown (consistencia con audit/technical)
+    if (options.format === "text") {
+      options.format = "markdown";
+    }
     const validFormats = ["markdown", "url", "json"];
     if (!validFormats.includes(options.format)) {
       console.error(
@@ -1803,4 +1898,16 @@ if (process.argv.length === 2) {
   process.exit(0);
 }
 
-program.parse();
+try {
+  program.parse();
+} catch (e) {
+  if (e.code === "ENOENT" || e.code === "MODULE_NOT_FOUND") {
+    console.error(
+      "Error: geo-opt is not properly built. The dist/ directory is missing.\n" +
+        "Run 'npm run build' first, or install from the npm registry."
+    );
+  } else {
+    console.error(`Error: ${e.message}`);
+  }
+  process.exit(1);
+}
