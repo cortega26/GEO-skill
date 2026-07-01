@@ -399,7 +399,7 @@ npm run changelog:check  # aplica la política de actualización de CHANGELOG.md
 
 La implementación JavaScript en `src/` es la canónica. Un port de compatibilidad Python 3 viene incluido para flujos de trabajo impulsados por agentes; su alcance está definido por la matriz de capacidades en [`docs/architecture.md`](docs/architecture.md).
 
-La gobernanza de documentación y los disparadores de cambio están definidos en [`docs/documentation-governance.md`](docs/documentation-governance.md). Reporta bugs en [GitHub Issues](https://github.com/cortega26/geo-opt/issues).
+La gobernanza de documentación y los disparadores de cambio están definidos en [`docs/documentation-governance.md`](docs/documentation-governance.md). Reporta bugs en [GitHub Issues](https://github.com/cortega26/geo-opt/issues) — consulta [`docs/reporting-issues.md`](docs/reporting-issues.md) para saber qué incluir (y qué redactar).
 
 ---
 

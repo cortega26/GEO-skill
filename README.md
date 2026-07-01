@@ -411,7 +411,7 @@ npm run changelog:check  # enforce CHANGELOG.md update policy
 
 The JavaScript implementation under `src/` is canonical. A Python 3 compatibility port is bundled for agent-driven workflows; its scope is defined by the capability matrix in [`docs/architecture.md`](docs/architecture.md).
 
-Documentation governance and change triggers are defined in [`docs/documentation-governance.md`](docs/documentation-governance.md). Report bugs via [GitHub Issues](https://github.com/cortega26/geo-opt/issues).
+Documentation governance and change triggers are defined in [`docs/documentation-governance.md`](docs/documentation-governance.md). Report bugs via [GitHub Issues](https://github.com/cortega26/geo-opt/issues) — see [`docs/reporting-issues.md`](docs/reporting-issues.md) for what to include (and what to redact).
 
 ---
 

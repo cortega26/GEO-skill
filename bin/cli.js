@@ -93,7 +93,7 @@ const program = new Command();
 
 program
   .name("geo-opt")
-  .description("Generative Engine Optimization CLI")
+  .description("AI-discoverability CLI: GEO, structured data, and technical SEO")
   .option("--config <path>", "Path to geo_config.json")
   .version("2.0.0");
 

@@ -1,6 +1,6 @@
 # Free vs. Pro
 
-`geo-opt` es una herramienta de auditoría GEO (Generative Engine Optimization) que viene en dos ediciones. La edición **Free** permite auditar, validar y evaluar cualquier página individual sin costo ni registro. La edición **Pro** desbloquea la optimización automatizada, la escritura directa de archivos y el procesamiento a escala de sitio completo, con acceso a más de 15 comandos adicionales y a la API (Application Programming Interface) de librería avanzada descrita en esta página.
+`geo-opt` es un toolkit de descubribilidad por IA — GEO (Generative Engine Optimization), datos estructurados y SEO técnico — que viene en dos ediciones. La edición **Free** permite auditar, validar y evaluar cualquier página individual sin costo ni registro. La edición **Pro** desbloquea la optimización automatizada, la escritura directa de archivos y el procesamiento a escala de sitio completo, con acceso a más de 15 comandos adicionales y a la API (Application Programming Interface) de librería avanzada descrita en esta página.
 
 Si puedes leerlo, es Free. Si lo escribes o lo escalas, es Pro.
 

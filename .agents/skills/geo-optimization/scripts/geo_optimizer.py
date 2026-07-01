@@ -2261,7 +2261,9 @@ def audit_file_json(filepath, config):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GEO (Generative Engine Optimization) Audit and Helper Tool")
+    parser = argparse.ArgumentParser(
+        description="AI-discoverability audit & helper tool (GEO, structured data, crawler policy)"
+    )
     parser.add_argument("--config", help="Path to geo_config.json configuration file")
 
     subparsers = parser.add_subparsers(dest="command", help="Subcommand to run")
