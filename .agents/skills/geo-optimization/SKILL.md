@@ -20,7 +20,9 @@ traditional search — depend on.
 >
 > - **`node bin/cli.js`** (JavaScript/Node.js) — the canonical source CLI. Use
 >   it for v2, the JavaScript API, CI/CD and local development from a repository
->   checkout. The public npm package has not been released.
+>   checkout. The package is also published on npm as `geo-opt`
+>   (`npx geo-opt <command>`); this skill uses the bundled source CLI so it can
+>   rely on v2 and the full library surface.
 > - **`python3 scripts/geo_optimizer.py`** — capability-scoped Python
 >   compatibility port used by this skill. It supports the legacy v1 audit and
 >   selected schema, robots, `llms.txt`, batch, config and injection workflows;

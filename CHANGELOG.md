@@ -14,15 +14,6 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
-### Bug Fixes
-
-- P22: `hasSelfHreflang` no longer fails when source URL and hreflang href
-  differ only by a trailing slash
-- P23: `mailto:`, `tel:`, `fax:`, and `sms:` links are no longer classified as
-  invalid link targets
-- O24: profile detector now recognizes Spanish service/consulting vocabulary
-  (`consultor`, `servicios profesionales`, `consultoría`, etc.)
-
 ### Docs
 
 - Reposition the project as a three-pillar AI-discoverability toolkit (GEO +
@@ -33,6 +24,10 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   (`docs/reporting-issues.md`, bundled skill section, linked from the README
   Development sections) plus a redaction notice and an agent-origin checkbox to
   the bug-report issue template
+- Correct the bundled skill's stale "npm package not released" note (`geo-opt`
+  is published on npm) and expand `package.json` keywords for the three-pillar
+  positioning (`technical-seo`, `structured-data`, `sitemap`, `aeo`,
+  `generative-engine-optimization`)
 
 ## [2.1.2](https://github.com/cortega26/geo-opt/compare/v2.1.1...v2.1.2) (2026-06-30)
 

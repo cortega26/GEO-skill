@@ -63,7 +63,12 @@
     "json-ld",
     "robots-txt",
     "llms-txt",
-    "ai-discoverability"
+    "ai-discoverability",
+    "generative-engine-optimization",
+    "technical-seo",
+    "structured-data",
+    "sitemap",
+    "aeo"
   ],
   "author": "Carlos Ortega González",
   "license": "SEE LICENSE IN LICENSE",
